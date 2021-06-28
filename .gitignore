@@ -6,3 +6,11 @@ pytorch_env
 models
 build
 correlation.egg-info
+jobs/
+.vscode/
+.vim/
+tmp/
+output/
+result/
+.python-version
+*.zip
