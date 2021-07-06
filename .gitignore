@@ -14,3 +14,4 @@ output/
 result/
 .python-version
 *.zip
+*.out
