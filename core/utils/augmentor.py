@@ -1,16 +1,15 @@
 import numpy as np
-import random
-import math
+# import random
+# import math
 from PIL import Image
-
 import cv2
+
+# import torch
+from torchvision.transforms import ColorJitter
+# import torch.nn.functional as F
 
 cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
-
-import torch
-from torchvision.transforms import ColorJitter
-import torch.nn.functional as F
 
 
 class FlowAugmentor:
