@@ -256,7 +256,8 @@ def fetch_dataloader(args, TRAIN_DS='C+T+K+S+H'):
                 'max_scale': 0.2,
                 'do_flip': True
             })
-            train_dataset = 100 * sintel_clean + 100 * sintel_final + 200 * kitti + 5 * hd1k + things
+            train_dataset = (100 * sintel_clean + 100 * sintel_final + 200 * kitti +
+                             5 * hd1k + things)
 
         elif TRAIN_DS == 'C+T+K/S':
             train_dataset = 100 * sintel_clean + 100 * sintel_final + things

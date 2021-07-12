@@ -1,30 +1,27 @@
 from __future__ import print_function, division
-import sys
-
-sys.path.append('core')
 
 import argparse
 import os
-import cv2
-import time
+# import cv2
+# import time
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
+# import torch.nn.functional as F
+# from torch.utils.data import DataLoader
 
-from torch.utils.data import DataLoader
-from raft import RAFT
+from core.raft import RAFT
 import evaluate
-import datasets
+import core.datasets as datasets
 
 from torch.utils.tensorboard import SummaryWriter
 
 try:
     from torch.cuda.amp import GradScaler
-except:
+except ImportError:
     # dummy GradScaler for PyTorch < 1.6
     class GradScaler:
         def __init__(self):
@@ -170,7 +167,7 @@ def train(args):
     logger = Logger(model, scheduler)
 
     VAL_FREQ = 5000
-    add_noise = True
+    # add_noise = True
 
     should_keep_training = True
     while should_keep_training:
