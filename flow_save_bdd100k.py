@@ -25,6 +25,7 @@ def demo(args):
     with torch.no_grad():
         bdd_dataset = BDD(root=args.root,
                           subset=args.subset,
+                          data_start=args.start,
                           debug_load_num=args.datanum,
                           random_sample=args.random)
         output_path = osp.join(args.output, args.subset)
@@ -154,7 +155,7 @@ if __name__ == "__main__":
     parser.add_argument("--time-offprint", action="store_true")
     parser.add_argument("--datanum", type=int, default=None, help="# of video")
     parser.add_argument("--random", action="store_true", help="random load")
-    # parser.add_argument("--start", type=int, default=0, help="start number")
+    parser.add_argument("--start", type=int, default=0, help="start number")
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--format-save",
                         default="torch_save",
