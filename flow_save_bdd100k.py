@@ -37,7 +37,8 @@ def demo(args):
             s_time = time.time()
             # image1, image2, (sequence, frame) = bdd_dataset[test_id]
             image1, image2, (sequence, frame) = data
-            print(test_id, type(image1), image1.shape, sequence, frame)
+            if args.debug:
+                print(test_id, type(image1), image1.shape, sequence, frame)
             if sequence != sequence_prev:
                 flow_prev = None
                 if args.all and sequence_prev is not None:
@@ -47,12 +48,14 @@ def demo(args):
                         os.makedirs(output_dir)
                     if args.format_save == "pickle":
                         picfile = osp.join(output_dir, "flow-all.binaryfile")
-                        print("debug:", picfile)
+                        if args.debug:
+                            print("debug:", picfile)
                         with open(picfile, mode="wb") as f:
                             pickle.dump(pickle_list, f)
                     elif args.format_save == "torch_save":
                         picfile = osp.join(output_dir, "flow-all.pth")
-                        print("debug:", picfile)
+                        if args.debug:
+                            print("debug:", picfile)
                         torch.save(pickle_list, picfile)
 
             padder = InputPadder(image1.shape)
@@ -81,6 +84,7 @@ def demo(args):
                 pickle_list.append(flow_low)
                 cur_time = time.time() - s_time
                 total_time += cur_time
+                print(test_id, ": ", cur_time)
                 continue
 
             base_name = ("%04d" % (frame + 1))
@@ -89,7 +93,8 @@ def demo(args):
                 os.makedirs(output_dir)
             if args.format_save == "pickle":
                 picfile = osp.join(output_dir, "flow-{}.binaryfile".format(base_name))
-                print("debug:", picfile)
+                if args.debug:
+                    print("debug:", picfile)
                 with open(picfile, mode="wb") as f:
                     pickle.dump(flow_low, f)
                 # with open(picfile, mode="rb") as f:
@@ -97,7 +102,8 @@ def demo(args):
                 # print(type(d), d.size(), flow_up.size())
             else:
                 picfile = osp.join(output_dir, "flow-{}.pth".format(base_name))
-                print("debug:", picfile)
+                if args.debug:
+                    print("debug:", picfile)
                 torch.save(flow_low, picfile)
                 # d = torch.load(picfile)
                 # print(type(d), d.size(), flow_up.size())
@@ -112,12 +118,14 @@ def demo(args):
                 os.makedirs(output_dir)
             if args.format_save == "pickle":
                 picfile = osp.join(output_dir, "flow-all.binaryfile")
-                print("debug:", picfile)
+                if args.debug:
+                    print("debug:", picfile)
                 with open(picfile, mode="wb") as f:
                     pickle.dump(pickle_list, f)
             elif args.format_save == "torch_save":
                 picfile = osp.join(output_dir, "flow-all.pth")
-                print("debug:", picfile)
+                if args.debug:
+                    print("debug:", picfile)
                 torch.save(pickle_list, picfile)
         print("total: ", total_time)
 
