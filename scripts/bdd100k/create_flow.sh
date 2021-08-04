@@ -4,27 +4,28 @@ START_TIMESTAMP=$(date '+%s')
 
 git_root=$(git rev-parse --show-toplevel | head -1)
 
-. /etc/profile.d/modules.sh
+# . /etc/profile.d/modules.sh
 
-module load cuda/11.1
+# module load cuda/11.1
 
 data_root=$(
     cd "$1" || exit
     pwd
 )
+start_index=$2
+data_num=$3
+subset="$4"
+
 flow_out="$data_root/flow"
-script_name=$(basename "$0")
-script_dir="$flow_out/scripts"
-mkdir -p "$script_dir"
 
 pushd "$git_root"
 
 python flow_save_bdd100k.py \
     --output "$flow_out" \
     --root "$data_root" \
-    --subset "train" \
-    --start 0 \
-    --datanum 10 \
+    --subset "$subset" \
+    --start $start_index \
+    --datanum $datanum \
     --format-save "torch_save" \
     --model "$git_root/models/raft-small.pth" \
     --small \
@@ -49,4 +50,3 @@ END_TIMESTAMP=$(date '+%s')
 E_TIME=$(($END_TIMESTAMP-$START_TIMESTAMP))
 echo $E_TIME
 
-cp "$script_name" "$script_dir"
