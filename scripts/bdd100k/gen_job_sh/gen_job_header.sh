@@ -59,7 +59,7 @@ out_dir="$outdir"
 if [ -n "$out_dir" ]; then
     if [ -d "$out_dir" ]; then
         out_dir=$(
-            cd "$6" || exit
+            cd "$outdir" || exit
             pwd
         )
     else

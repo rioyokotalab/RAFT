@@ -5,7 +5,7 @@ script_dir=$(
 )
 git_root=$(git rev-parse --show-toplevel | head -1)
 
-tar_script_name="$git_root/scripts/create_flow.sh"
+tar_script_name="$git_root/scripts/bdd100k/create_flow.sh"
 out_dir="$git_root/jobs/gen_flow"
 mkdir -p "$out_dir"
 result_dir="$git_root/output/"

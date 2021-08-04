@@ -25,7 +25,7 @@ python flow_save_bdd100k.py \
     --root "$data_root" \
     --subset "$subset" \
     --start $start_index \
-    --datanum $datanum \
+    --datanum $data_num \
     --format-save "torch_save" \
     --model "$git_root/models/raft-small.pth" \
     --small \
