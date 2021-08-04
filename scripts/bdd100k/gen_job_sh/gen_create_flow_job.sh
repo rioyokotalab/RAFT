@@ -91,6 +91,7 @@ do
     fi
     bash "$script_dir/gen_job_header.sh" "$file_name" "$node_name" "$nodenum" "$time" "$job_name" "$result_dir"
     echo "source /etc/profile.d/modules.sh" >> "$file_name"
+    echo "source \"\$HOME/.bashrc\"" >> "$file_name"
     echo "" >> "$file_name"
     if type "qsub" > /dev/null 2>&1
     then
