@@ -71,18 +71,18 @@ def demo(args):
                                       flow_init=flow_prev,
                                       test_mode=True)
             # flow = padder.unpad(flow_pr[0]).permute(1, 2, 0).cpu().numpy()
-            flow = padder.unpad(flow_low[0]).permute(1, 2, 0).cpu().numpy()
+            # flow = padder.unpad(flow_low[0]).permute(1, 2, 0).cpu().numpy()
 
             if args.warm_start:
                 flow_prev = forward_interpolate(flow_low[0])[None].cuda()
 
             output_dir = osp.join(output_path, sequence)
-            output_file = osp.join(output_dir, "frame%04d.flo" % (frame + 1))
+            # output_file = osp.join(output_dir, "frame%04d.flo" % (frame + 1))
 
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
 
-            frame_utils.writeFlow(output_file, flow)
+            # frame_utils.writeFlow(output_file, flow)
             sequence_prev = sequence
             if args.all:
                 pickle_list.append(flow_low)
