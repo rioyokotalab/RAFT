@@ -20,7 +20,7 @@ pyenv virtualenv 3.8.6 raft
 pyenv local raft
 pip install matplotlib tensorboard scipy 
 pip install opencv-contrib-python
-pip install torch==1.7.0+cu110 torchvision==0.8.0+cu110 torchaudio==0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
+pip install torch==1.7.0+cu110 torchvision==0.8.1+cu110 torchaudio==0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
 ## Demos
