@@ -6,7 +6,7 @@ import pickle
 import time
 
 from core.raft import RAFT
-from core.utils import frame_utils
+# from core.utils import frame_utils
 from core.utils.utils import InputPadder
 from core.utils.utils import forward_interpolate
 from bdd100k_lib.video_datasets import BDD
@@ -28,7 +28,7 @@ def demo(args):
                           data_start=args.start,
                           debug_load_num=args.datanum,
                           random_sample=args.random)
-        output_path = osp.join(args.output, args.subset)
+        output_path = osp.join(args.output, args.subset, args.format_save)
         total_time, local_id = 0, 0
         pickle_list = []
 
@@ -44,8 +44,7 @@ def demo(args):
                 local_id = 0
                 flow_prev = None
                 if args.all and sequence_prev is not None:
-                    output_dir = osp.join(output_path, sequence_prev, args.format_save,
-                                          "all")
+                    output_dir = osp.join(output_path, sequence_prev, "all")
                     if not osp.exists(output_dir):
                         os.makedirs(output_dir)
                     if args.format_save == "pickle":
@@ -94,9 +93,6 @@ def demo(args):
                 continue
 
             base_name = ("%04d" % (frame + 1))
-            output_dir = osp.join(output_dir, args.format_save)
-            if not osp.exists(output_dir):
-                os.makedirs(output_dir)
             if args.format_save == "pickle":
                 picfile = osp.join(output_dir, "flow-{}.binaryfile".format(base_name))
                 if args.debug:
@@ -121,7 +117,7 @@ def demo(args):
             # end for
 
         if args.all and sequence_prev is not None:
-            output_dir = osp.join(output_path, sequence_prev, args.format_save, "all")
+            output_dir = osp.join(output_path, sequence_prev, "all")
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
             if args.format_save == "pickle":
