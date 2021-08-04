@@ -11,7 +11,7 @@ from core.utils.utils import InputPadder
 from core.utils.utils import forward_interpolate
 from bdd100k_lib.video_datasets import BDD
 
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def demo(args):
@@ -27,7 +27,7 @@ def demo(args):
                           subset=args.subset,
                           debug_mode=args.debug,
                           debug_load_num=args.datanum,
-                          random_sample=True)
+                          random_sample=args.random)
         output_path = osp.join(args.output, args.subset)
         total_time = 0
         pickle_list = []
@@ -123,31 +123,32 @@ def demo(args):
         print("total: ", total_time)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output', default='result', help="output flow image")
-    parser.add_argument('--root',
+    parser.add_argument("--output", default="result", help="output flow image")
+    parser.add_argument("--root",
                         type=str,
                         default=None,
                         help="root of dataset for evaluation")
-    parser.add_argument('--subset', type=str, default="train", help="subset name")
-    parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--datanum', type=int, default=None, help="# of video")
-    # parser.add_argument('--start', type=int, default=0, help="start number")
-    parser.add_argument('--all', action='store_true')
-    parser.add_argument('--format-save',
+    parser.add_argument("--subset", type=str, default="train", help="subset name")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--datanum", type=int, default=None, help="# of video")
+    parser.add_argument("--random", action="store_true", help="random load")
+    # parser.add_argument("--start", type=int, default=0, help="start number")
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument("--format-save",
                         default="torch_save",
                         choices=["torch_save", "pickle", "png"])
-    parser.add_argument('--model', help="restore checkpoint")
-    parser.add_argument('--small', action='store_true', help='use small model')
-    parser.add_argument('--mixed_precision',
-                        action='store_true',
-                        help='use mixed precision')
-    parser.add_argument('--alternate_corr',
-                        action='store_true',
-                        help='use efficent correlation implementation')
-    parser.add_argument('--iters', type=int, default=20, help='iteration of flow')
-    parser.add_argument('--warm-start', action='store_true', help='consider prev flow')
+    parser.add_argument("--model", help="restore checkpoint")
+    parser.add_argument("--small", action="store_true", help="use small model")
+    parser.add_argument("--mixed_precision",
+                        action="store_true",
+                        help="use mixed precision")
+    parser.add_argument("--alternate_corr",
+                        action="store_true",
+                        help="use efficent correlation implementation")
+    parser.add_argument("--iters", type=int, default=20, help="iteration of flow")
+    parser.add_argument("--warm-start", action="store_true", help="consider prev flow")
     args = parser.parse_args()
 
     demo(args)
