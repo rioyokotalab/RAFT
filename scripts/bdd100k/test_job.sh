@@ -27,7 +27,8 @@ python flow_save_bdd100k.py \
     --mixed_precision \
     --iters 20 \
     --warm-start \
-    --all \
+    # --all \
+    # --random \
     # --format-save "pickle" \
     # --model "$git_root/models/raft-things.pth" \
     # --start
