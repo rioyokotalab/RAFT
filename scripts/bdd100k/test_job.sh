@@ -27,6 +27,9 @@ python flow_save_bdd100k.py \
     --mixed_precision \
     --iters 20 \
     --warm-start \
+    --time-offprint \
+    # --localtime-offprint \
+    # --all-offprint \
     # --all \
     # --random \
     # --format-save "pickle" \

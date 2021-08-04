@@ -28,7 +28,7 @@ def demo(args):
                           debug_load_num=args.datanum,
                           random_sample=args.random)
         output_path = osp.join(args.output, args.subset)
-        total_time = 0
+        total_time, local_id = 0, 0
         pickle_list = []
 
         flow_prev, sequence_prev = None, None
@@ -38,8 +38,9 @@ def demo(args):
             # image1, image2, (sequence, frame) = bdd_dataset[test_id]
             image1, image2, (sequence, frame) = data
             if args.debug:
-                print(test_id, type(image1), image1.shape, sequence, frame)
+                print(local_id, test_id, type(image1), image1.shape, sequence, frame)
             if sequence != sequence_prev:
+                local_id = 0
                 flow_prev = None
                 if args.all and sequence_prev is not None:
                     output_dir = osp.join(output_path, sequence_prev, args.format_save,
@@ -57,6 +58,8 @@ def demo(args):
                         if args.debug:
                             print("debug:", picfile)
                         torch.save(pickle_list, picfile)
+                if not args.localtime_offprint and not args.all_offprint:
+                    print(sequence_prev, " total: ", total_time)
 
             padder = InputPadder(image1.shape)
             image1, image2 = padder.pad(image1[None].cuda(), image2[None].cuda())
@@ -84,7 +87,9 @@ def demo(args):
                 pickle_list.append(flow_low)
                 cur_time = time.time() - s_time
                 total_time += cur_time
-                print(test_id, ": ", cur_time)
+                local_id += 1
+                if not args.all_offprint and not args.time_offprint:
+                    print(local_id, ": ", test_id, ": ", cur_time)
                 continue
 
             base_name = ("%04d" % (frame + 1))
@@ -109,7 +114,9 @@ def demo(args):
                 # print(type(d), d.size(), flow_up.size())
             cur_time = time.time() - s_time
             total_time += cur_time
-            print(test_id, ": ", cur_time)
+            local_id += 1
+            if not args.all_offprint and not args.time_offprint:
+                print(local_id, ": ", test_id, ": ", cur_time)
             # end for
 
         if args.all and sequence_prev is not None:
@@ -127,7 +134,10 @@ def demo(args):
                 if args.debug:
                     print("debug:", picfile)
                 torch.save(pickle_list, picfile)
-        print("total: ", total_time)
+        if not args.localtime_offprint and not args.all_offprint:
+            print(sequence_prev, " total: ", total_time)
+        if not args.all_offprint:
+            print("total: ", total_time)
 
 
 if __name__ == "__main__":
@@ -139,6 +149,9 @@ if __name__ == "__main__":
                         help="root of dataset for evaluation")
     parser.add_argument("--subset", type=str, default="train", help="subset name")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--all-offprint", action="store_true")
+    parser.add_argument("--localtime-offprint", action="store_true")
+    parser.add_argument("--time-offprint", action="store_true")
     parser.add_argument("--datanum", type=int, default=None, help="# of video")
     parser.add_argument("--random", action="store_true", help="random load")
     # parser.add_argument("--start", type=int, default=0, help="start number")
