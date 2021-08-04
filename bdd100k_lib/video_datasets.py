@@ -45,8 +45,7 @@ class BDD(FlowBDDDataset):
         self,
         root,
         subset='train',
-        debug_mode=False,
-        debug_load_num=10000,
+        debug_load_num=None,
         random_sample=True,
     ):
         super().__init__()
@@ -62,13 +61,13 @@ class BDD(FlowBDDDataset):
 
         dir_names = sorted(os.listdir(self.img_path))
         selected_dirs = dir_names
-        data_num = debug_load_num if debug_load_num else len(dir_names)
-        data_num = data_num if data_num <= len(dir_names) else len(dir_names)
-        if debug_mode:
-            if random_sample:
-                selected_dirs = random.sample(dir_names, data_num)
-            else:
-                selected_dirs = dir_names[:data_num]
+        all_datanum = len(dir_names)
+        data_num = debug_load_num if debug_load_num else all_datanum
+        data_num = data_num if data_num <= all_datanum else all_datanum
+        if random_sample:
+            selected_dirs = random.sample(dir_names, data_num)
+        else:
+            selected_dirs = dir_names[:data_num]
         for seq in selected_dirs:
             images = sorted(glob(osp.join(self.img_path, seq, '*.jpg')))
             # self.sequences[seq]['images'] = images

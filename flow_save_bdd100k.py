@@ -25,7 +25,6 @@ def demo(args):
     with torch.no_grad():
         bdd_dataset = BDD(root=args.root,
                           subset=args.subset,
-                          debug_mode=args.debug,
                           debug_load_num=args.datanum,
                           random_sample=args.random)
         output_path = osp.join(args.output, args.subset)
