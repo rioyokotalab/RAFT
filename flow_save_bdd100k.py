@@ -41,7 +41,7 @@ def demo(args):
             print(test_id, type(image1), image1.shape, sequence, frame)
             if sequence != sequence_prev:
                 flow_prev = None
-                if args.all:
+                if args.all and sequence_prev is not None:
                     output_dir = osp.join(output_path, sequence_prev, args.format_save,
                                           "all")
                     if not osp.exists(output_dir):
@@ -71,7 +71,7 @@ def demo(args):
                 flow_prev = forward_interpolate(flow_low[0])[None].cuda()
 
             output_dir = osp.join(output_path, sequence)
-            output_file = osp.join(output_dir, 'frame%04d.flo' % (frame + 1))
+            output_file = osp.join(output_dir, "frame%04d.flo" % (frame + 1))
 
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
@@ -80,9 +80,11 @@ def demo(args):
             sequence_prev = sequence
             if args.all:
                 pickle_list.append(flow_low)
+                cur_time = time.time() - s_time
+                total_time += cur_time
                 continue
 
-            base_name = ("{%04d}" % (frame + 1))
+            base_name = ("%04d" % (frame + 1))
             output_dir = osp.join(output_dir, args.format_save)
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
@@ -103,7 +105,21 @@ def demo(args):
             cur_time = time.time() - s_time
             total_time += cur_time
             print(test_id, ": ", cur_time)
+            # end for
 
+        if args.all and sequence_prev is not None:
+            output_dir = osp.join(output_path, sequence_prev, args.format_save, "all")
+            if not osp.exists(output_dir):
+                os.makedirs(output_dir)
+            if args.format_save == "pickle":
+                picfile = osp.join(output_dir, "flow-all.binaryfile")
+                print("debug:", picfile)
+                with open(picfile, mode="wb") as f:
+                    pickle.dump(pickle_list, f)
+            elif args.format_save == "torch_save":
+                picfile = osp.join(output_dir, "flow-all.pth")
+                print("debug:", picfile)
+                torch.save(pickle_list, picfile)
         print("total: ", total_time)
 
 
