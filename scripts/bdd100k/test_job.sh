@@ -14,13 +14,13 @@ data_root=$(
 )
 flow_out="$data_root/flow"
 script_name=$(basename "$0")
-script_dir="$data_root/flow"
+script_dir="$flow_out/scripts"
 mkdir -p "$script_dir"
 
 pushd "$git_root"
 
 python flow_save_bdd100k.py \
-    --output "$data_root/flow" \
+    --output "$flow_out" \
     --root "$data_root" \
     --subset "train" \
     --start 0 \
