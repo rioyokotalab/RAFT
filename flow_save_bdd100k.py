@@ -1,17 +1,73 @@
 import argparse
 import os
 import os.path as osp
-import torch
+import cv2
 import pickle
 import time
 
+import torch
+import numpy as np
+
 from core.raft import RAFT
-# from core.utils import frame_utils
+from core.utils import frame_utils, flow_viz
 from core.utils.utils import InputPadder
 from core.utils.utils import forward_interpolate
 from bdd100k_lib.video_datasets import BDD
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+FORMAT_SAVE = ["torch_save", "pickle", "png", "flo"]
+TORCH_SAVE = 0
+PICKLE_SAVE = 1
+PNG_SAVE = 2
+FLO_SAVE = 3
+
+
+def viz(img, flo):
+    img = img[0].permute(1, 2, 0).cpu().numpy()
+    flo = flo[0].permute(1, 2, 0).cpu().numpy()
+
+    # map flow to rgb image
+    flo = flow_viz.flow_to_image(flo)
+    img_flo = np.concatenate([img, flo], axis=0)
+
+    # import matplotlib.pyplot as plt
+    # plt.imshow(img_flo / 255.0)
+    # plt.show()
+    # cv2.imshow('image', img_flo[:, :, [2, 1, 0]] / 255.0)
+    # cv2.waitKey()
+
+    return img_flo[:, :, [2, 1, 0]]
+
+
+def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
+    if format_save == FORMAT_SAVE[PICKLE_SAVE]:
+        picfile = osp.join(out_dir, "flow-{}.binaryfile".format(base_name))
+        if debug:
+            print("debug:", picfile)
+        with open(picfile, mode="wb") as f:
+            pickle.dump(flow, f)
+        # with open(picfile, mode="rb") as f:
+        #     d = pickle.load(f)
+        # print(type(d), d.size(), flow_up.size())
+    elif format_save == FORMAT_SAVE[TORCH_SAVE]:
+        picfile = osp.join(out_dir, "flow-{}.pth".format(base_name))
+        if args.debug:
+            print("debug:", picfile)
+        torch.save(flow, picfile)
+        # d = torch.load(picfile)
+        # print(type(d), d.size(), flow_up.size())
+    elif format_save == FORMAT_SAVE[PNG_SAVE]:
+        if image1 is None or type(flow) == list:
+            return
+        flow_save = viz(image1, flow)
+        picfile = osp.join(out_dir, "flow-{}.png".format(base_name))
+        cv2.imwrite(picfile, flow_save)
+    elif format_save == FORMAT_SAVE[FLO_SAVE]:
+        if padder is None or type(flow) == list:
+            return
+        output_file = osp.join(out_dir, "frame-{}.flo".format(base_name))
+        flow_save = padder.unpad(flow[0]).permute(1, 2, 0).cpu().numpy()
+        frame_utils.writeFlow(output_file, flow_save)
 
 
 def demo(args):
@@ -47,19 +103,11 @@ def demo(args):
                     output_dir = osp.join(output_path, sequence_prev, "all")
                     if not osp.exists(output_dir):
                         os.makedirs(output_dir)
-                    if args.format_save == "pickle":
-                        picfile = osp.join(output_dir, "flow-all.binaryfile")
-                        if args.debug:
-                            print("debug:", picfile)
-                        with open(picfile, mode="wb") as f:
-                            pickle.dump(pickle_list, f)
-                    elif args.format_save == "torch_save":
-                        picfile = osp.join(output_dir, "flow-all.pth")
-                        if args.debug:
-                            print("debug:", picfile)
-                        torch.save(pickle_list, picfile)
+                    save_flow(pickle_list, output_dir, "all", args.format_save, None,
+                              None, args.debug)
                 if not args.localtime_offprint and not args.all_offprint:
                     print(sequence_prev, " total: ", total_time)
+                pickle_list = []
 
             padder = InputPadder(image1.shape)
             image1, image2 = padder.pad(image1[None].cuda(), image2[None].cuda())
@@ -69,22 +117,19 @@ def demo(args):
                                       iters=args.iters,
                                       flow_init=flow_prev,
                                       test_mode=True)
-            # flow = padder.unpad(flow_pr[0]).permute(1, 2, 0).cpu().numpy()
-            # flow = padder.unpad(flow_low[0]).permute(1, 2, 0).cpu().numpy()
 
             if args.warm_start:
                 flow_prev = forward_interpolate(flow_low[0])[None].cuda()
 
             output_dir = osp.join(output_path, sequence)
-            # output_file = osp.join(output_dir, "frame%04d.flo" % (frame + 1))
 
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
 
-            # frame_utils.writeFlow(output_file, flow)
             sequence_prev = sequence
             if args.all:
                 pickle_list.append(flow_low)
+                # pickle_list.append(flow_pr)
                 cur_time = time.time() - s_time
                 total_time += cur_time
                 local_id += 1
@@ -93,22 +138,10 @@ def demo(args):
                 continue
 
             base_name = ("%04d" % (frame + 1))
-            if args.format_save == "pickle":
-                picfile = osp.join(output_dir, "flow-{}.binaryfile".format(base_name))
-                if args.debug:
-                    print("debug:", picfile)
-                with open(picfile, mode="wb") as f:
-                    pickle.dump(flow_low, f)
-                # with open(picfile, mode="rb") as f:
-                #     d = pickle.load(f)
-                # print(type(d), d.size(), flow_up.size())
-            else:
-                picfile = osp.join(output_dir, "flow-{}.pth".format(base_name))
-                if args.debug:
-                    print("debug:", picfile)
-                torch.save(flow_low, picfile)
-                # d = torch.load(picfile)
-                # print(type(d), d.size(), flow_up.size())
+            save_flow(flow_low, output_dir, base_name, args.format_save, image1, padder,
+                      args.debug)
+            # save_flow(flow_pr, output_dir, base_name, args.format_save, image1,
+            #         padder, args.debug)
             cur_time = time.time() - s_time
             total_time += cur_time
             local_id += 1
@@ -120,17 +153,8 @@ def demo(args):
             output_dir = osp.join(output_path, sequence_prev, "all")
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
-            if args.format_save == "pickle":
-                picfile = osp.join(output_dir, "flow-all.binaryfile")
-                if args.debug:
-                    print("debug:", picfile)
-                with open(picfile, mode="wb") as f:
-                    pickle.dump(pickle_list, f)
-            elif args.format_save == "torch_save":
-                picfile = osp.join(output_dir, "flow-all.pth")
-                if args.debug:
-                    print("debug:", picfile)
-                torch.save(pickle_list, picfile)
+            save_flow(pickle_list, output_dir, "all", args.format_save, None, None,
+                      args.debug)
         if not args.localtime_offprint and not args.all_offprint:
             print(sequence_prev, " total: ", total_time)
         if not args.all_offprint:
@@ -153,9 +177,7 @@ if __name__ == "__main__":
     parser.add_argument("--random", action="store_true", help="random load")
     parser.add_argument("--start", type=int, default=0, help="start number")
     parser.add_argument("--all", action="store_true")
-    parser.add_argument("--format-save",
-                        default="torch_save",
-                        choices=["torch_save", "pickle", "png"])
+    parser.add_argument("--format-save", default="torch_save", choices=FORMAT_SAVE)
     parser.add_argument("--model", help="restore checkpoint")
     parser.add_argument("--small", action="store_true", help="use small model")
     parser.add_argument("--mixed_precision",
