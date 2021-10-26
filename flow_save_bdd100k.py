@@ -85,6 +85,9 @@ def demo(args):
                           debug_load_num=args.datanum,
                           random_sample=args.random)
         output_path = osp.join(args.output, args.subset, args.format_save)
+        fwd_str, bwd_str = "forward", "backward"
+        fwd_outdir = osp.join(output_path, fwd_str)
+        # bwd_outdir = osp.join(output_path, bwd_str)
         total_time, local_id = 0, 0
         pickle_list = []
 
@@ -117,11 +120,17 @@ def demo(args):
                                       iters=args.iters,
                                       flow_init=flow_prev,
                                       test_mode=True)
+            # flow_bwd_low, flow_bwd_pr = model(image2,
+            #                                   image1,
+            #                                   iters=args.iters,
+            #                                   flow_init=None,
+            #                                   test_mode=True)
 
             if args.warm_start:
                 flow_prev = forward_interpolate(flow_low[0])[None].cuda()
 
-            output_dir = osp.join(output_path, sequence)
+            output_dir = osp.join(fwd_outdir, sequence)
+            # bwd_output_dir = osp.join(fwd_outdir, sequence)
 
             if not osp.exists(output_dir):
                 os.makedirs(output_dir)
