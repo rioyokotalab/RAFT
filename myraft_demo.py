@@ -1,0 +1,109 @@
+import argparse
+import os
+import os.path as osp
+import time
+
+import torch
+
+from core.raft import RAFT
+from bdd100k_lib.video_datasets import BDDVideo as BDD
+from bdd100k_lib.utils import final_gen_flow, preprocessing_imgs
+from .flow_save_bdd100k import save_flow
+
+FORMAT_SAVE = ["torch_save", "pickle", "png", "flo"]
+TORCH_SAVE = 0
+PICKLE_SAVE = 1
+PNG_SAVE = 2
+FLO_SAVE = 3
+
+
+def demo(args):
+    device_name = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device_name)
+    model = torch.nn.DataParallel(RAFT(args))
+    model.load_state_dict(torch.load(args.model))
+
+    model = model.module
+    model.to(device)
+    model.eval()
+
+    with torch.no_grad():
+        bdd_dataset = BDD(root=args.root,
+                          subset=args.subset,
+                          data_start=args.start,
+                          num_frames=args.n_frames,
+                          normalize=args.normalize,
+                          debug_load_num=args.datanum,
+                          debug_mode=args.debug)
+        output_path = osp.join(args.output, args.subset, args.format_save)
+        total_time, num_frames = 0, args.n_frames
+
+        for video_id, data in enumerate(bdd_dataset):
+            sequences = data
+            sequence = bdd_dataset.sequence_names[video_id]
+            if args.debug:
+                sequences, info = data
+                print(video_id, type(sequences), len(sequences))
+            all_num_frames = len(sequences)
+            e_idx = all_num_frames - num_frames + 1
+            for s_frame in range(e_idx):
+                s_time = time.perf_counter()
+                images = bdd_dataset.get_imgs(video_id, s_frame, num_frames)
+                images = [d.to(device, non_blocking=True) for d in images]
+                images, padder = preprocessing_imgs(images)
+
+                flow, flow_init = final_gen_flow(model, images, args.iters)
+
+                output_dir = osp.join(output_path, sequence)
+
+                if not osp.exists(output_dir):
+                    os.makedirs(output_dir)
+
+                base_name = ("%04d" % (s_frame + 1))
+
+                save_flow(flow, output_dir, base_name, args.format_save, images[0],
+                          padder, args.debug)
+                # save_flow(flow_pr, output_dir, base_name, args.format_save, image1,
+                #         padder, args.debug)
+                cur_time = time.perf_counter() - s_time
+                total_time += cur_time
+                if not args.all_offprint and not args.time_offprint:
+                    print(s_frame, ": ", video_id, ": ", cur_time)
+                # end for
+
+        if not args.all_offprint:
+            print("total: ", total_time)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", default="result", help="output flow image")
+    parser.add_argument("--root",
+                        type=str,
+                        default="/path/to/bdd100k",
+                        help="root of dataset for evaluation")
+    parser.add_argument("--subset", type=str, default="train", help="subset name")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--all-offprint", action="store_true")
+    parser.add_argument("--time-offprint", action="store_true")
+    parser.add_argument("--datanum", type=int, default=None, help="# of video")
+    parser.add_argument("--start", type=int, default=0, help="start number")
+    parser.add_argument("--format-save", default="torch_save", choices=FORMAT_SAVE)
+    parser.add_argument("--model", help="restore checkpoint")
+    parser.add_argument("--small", action="store_true", help="use small model")
+    parser.add_argument("--mixed_precision",
+                        action="store_true",
+                        help="use mixed precision")
+    parser.add_argument("--alternate_corr",
+                        action="store_true",
+                        help="use efficent correlation implementation")
+    parser.add_argument("--iters", type=int, default=12, help="iteration of flow")
+    parser.add_argument("--warm-start", action="store_true", help="consider prev flow")
+    parser.add_argument("--normalize", action="store_true", help="normalize data")
+    parser.add_argument("--n_frames",
+                        type=int,
+                        default=15,
+                        help="# of frames per video")
+    args = parser.parse_args()
+
+    demo(args)
