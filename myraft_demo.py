@@ -35,9 +35,7 @@ def demo(args):
         for video_id, data in enumerate(bdd_dataset):
             sequences = data
             sequence = bdd_dataset.sequence_names[video_id]
-            if args.debug:
-                sequences, info = data
-                print(video_id, type(sequences), len(sequences))
+            print(video_id, sequence, type(sequences), len(sequences))
             all_num_frames = len(sequences)
             e_idx = all_num_frames - num_frames + 1
             for s_frame in range(e_idx):
@@ -51,7 +49,7 @@ def demo(args):
                 output_dir = osp.join(output_path, sequence)
 
                 if not osp.exists(output_dir):
-                    os.makedirs(output_dir)
+                    os.makedirs(output_dir, exist_ok=True)
 
                 base_name = ("%04d" % (s_frame + 1))
 
