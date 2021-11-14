@@ -66,15 +66,13 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
 
 
 def preprocessing_imgs(imgs):
+    dim = imgs[0].dim()
+    if dim == 3:
+        imgs = [image[None].cuda() for image in imgs]
+    elif dim != 4:
+        raise NotImplementedError(f"not supported {dim}dims # of dim of images")
     image1 = imgs[0]
     padder = InputPadder(image1.shape)
-    dim = image1.dim()
-    if dim == 3:
-        imgs = [image[None].cuda().unsqueeze(0) for image in imgs]
-    elif dim == 4:
-        imgs = [image[None].cuda() for image in imgs]
-    else:
-        raise NotImplementedError("not supported # of dim of images")
     imgs = padder.pad(*imgs)
     return imgs, padder
 
