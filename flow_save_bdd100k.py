@@ -1,73 +1,17 @@
 import argparse
 import os
 import os.path as osp
-import cv2
-import pickle
 import time
 
 import torch
-import numpy as np
 
 from core.raft import RAFT
-from core.utils import frame_utils, flow_viz
 from core.utils.utils import InputPadder
 from core.utils.utils import forward_interpolate
 from bdd100k_lib.video_datasets import BDD
+from bdd100k_lib.utils import save_flow, FORMAT_SAVE
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-FORMAT_SAVE = ["torch_save", "pickle", "png", "flo"]
-TORCH_SAVE = 0
-PICKLE_SAVE = 1
-PNG_SAVE = 2
-FLO_SAVE = 3
-
-
-def viz(img, flo):
-    img = img[0].permute(1, 2, 0).cpu().numpy()
-    flo = flo[0].permute(1, 2, 0).cpu().numpy()
-
-    # map flow to rgb image
-    flo = flow_viz.flow_to_image(flo)
-    img_flo = np.concatenate([img, flo], axis=0)
-
-    # import matplotlib.pyplot as plt
-    # plt.imshow(img_flo / 255.0)
-    # plt.show()
-    # cv2.imshow('image', img_flo[:, :, [2, 1, 0]] / 255.0)
-    # cv2.waitKey()
-
-    return img_flo[:, :, [2, 1, 0]]
-
-
-def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
-    if format_save == FORMAT_SAVE[PICKLE_SAVE]:
-        picfile = osp.join(out_dir, "flow-{}.binaryfile".format(base_name))
-        if debug:
-            print("debug:", picfile)
-        with open(picfile, mode="wb") as f:
-            pickle.dump(flow, f)
-        # with open(picfile, mode="rb") as f:
-        #     d = pickle.load(f)
-        # print(type(d), d.size(), flow_up.size())
-    elif format_save == FORMAT_SAVE[TORCH_SAVE]:
-        picfile = osp.join(out_dir, "flow-{}.pth".format(base_name))
-        if args.debug:
-            print("debug:", picfile)
-        torch.save(flow, picfile)
-        # d = torch.load(picfile)
-        # print(type(d), d.size(), flow_up.size())
-    elif format_save == FORMAT_SAVE[PNG_SAVE]:
-        if image1 is None or type(flow) == list:
-            return
-        flow_save = viz(image1, flow)
-        picfile = osp.join(out_dir, "flow-{}.png".format(base_name))
-        cv2.imwrite(picfile, flow_save)
-    elif format_save == FORMAT_SAVE[FLO_SAVE]:
-        if padder is None or type(flow) == list:
-            return
-        output_file = osp.join(out_dir, "frame-{}.flo".format(base_name))
-        flow_save = padder.unpad(flow[0]).permute(1, 2, 0).cpu().numpy()
-        frame_utils.writeFlow(output_file, flow_save)
 
 
 def demo(args):
