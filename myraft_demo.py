@@ -8,13 +8,7 @@ import torch
 from core.raft import RAFT
 from bdd100k_lib.video_datasets import BDDVideo as BDD
 from bdd100k_lib.utils import final_gen_flow, preprocessing_imgs
-from .flow_save_bdd100k import save_flow
-
-FORMAT_SAVE = ["torch_save", "pickle", "png", "flo"]
-TORCH_SAVE = 0
-PICKLE_SAVE = 1
-PNG_SAVE = 2
-FLO_SAVE = 3
+from bdd100k_lib.utils import save_flow, FORMAT_SAVE
 
 
 def demo(args):
