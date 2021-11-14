@@ -127,7 +127,6 @@ class BDDVideo(data.Dataset):
         self.img_path = os.path.join(root, "images", subset)
         self.mask_path = os.path.join(root, "seg", "color_labels", subset)
         self.num_frames = num_frames
-        self.random_frame = random_frame
         self.debug_mode = debug_mode
         self.debug_load_num = debug_load_num
         self.config = f"bdd100k/{subset}"
@@ -151,7 +150,7 @@ class BDDVideo(data.Dataset):
             selected_dirs = (random.sample(dir_names, datanum)
                              if data_start < 0 else dir_names[data_start:e_idx])
         for seq in selected_dirs:
-            images = sorted(glob.glob(os.path.join(self.img_path, seq, "*.jpg")))
+            images = sorted(glob(os.path.join(self.img_path, seq, "*.jpg")))
             if len(images) < self.num_frames:
                 continue
             self.sequences[seq]["images"] = images
