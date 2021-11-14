@@ -7,11 +7,13 @@ models
 build
 correlation.egg-info
 jobs/
-.vscode/
-.vim/
+# .vscode/
+# .vim/
 tmp/
 output/
 result/
 .python-version
 *.zip
 *.out
+*.o*
+*.o
