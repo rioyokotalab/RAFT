@@ -199,6 +199,9 @@ class BDDVideo(data.Dataset):
         return str_info
 
     def get_info(self, info):
+        dim = info.dim()
+        if dim < 2:
+            info = info.unsqueeze(0)
         tmp = info.tolist()
         info_list = ""
         for t in tmp:

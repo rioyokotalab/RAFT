@@ -40,7 +40,11 @@ def demo(args):
             e_idx = all_num_frames - num_frames + 1
             for s_frame in range(e_idx):
                 s_time = time.perf_counter()
-                images = bdd_dataset.get_imgs(video_id, s_frame, num_frames)
+                data = bdd_dataset.get_imgs(video_id, s_frame, num_frames)
+                images = data
+                if args.debug:
+                    images, info = data
+                    print(video_id, s_frame, bdd_dataset.get_info(info))
                 images = [d.to(device, non_blocking=True) for d in images]
                 images, padder = preprocessing_imgs(images)
 
