@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from core.utils import flow_viz, frame_utils
+from core.utils import flow_viz, frame_utils, upflow8
 from core.utils.utils import InputPadder
 
 FORMAT_SAVE = ["torch_save", "pickle", "png", "flo"]
@@ -54,6 +54,9 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
     elif format_save == FORMAT_SAVE[PNG_SAVE]:
         if image1 is None or type(flow) == list:
             return
+        hi, hf = image1.shape[2], flow.shape[2]
+        if hf == (hi // 8):
+            flow = upflow8(flow)
         flow_save = viz(image1, flow)
         picfile = osp.join(out_dir, "flow-{}.png".format(base_name))
         cv2.imwrite(picfile, flow_save)
@@ -81,15 +84,17 @@ def preprocessing_imgs(imgs):
 def final_gen_flow(flow_model, imgs, iters=12):
     s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters)
     nb = s_img.shape[0]
+    flow_init_tmp = flow_init.permute(0, 2, 3, 1).clone()
     mask_rev = torch.logical_not(mask)
     for idx in range(nb):
-        flow_init[idx][mask_rev[idx]] = 0
-    flow = flow_model(s_img,
-                      e_img,
-                      iters=iters,
-                      flow_init=flow_init,
-                      upsample=False,
-                      test_mode=True)
+        flow_init_tmp[idx][mask_rev[idx]] = 0
+    flow_init = flow_init_tmp.permute(0, 3, 1, 2).clone()
+    flow, _ = flow_model(s_img,
+                         e_img,
+                         iters=iters,
+                         flow_init=flow_init,
+                         upsample=False,
+                         test_mode=True)
     return flow, flow_init
 
 
