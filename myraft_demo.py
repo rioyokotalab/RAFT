@@ -59,8 +59,8 @@ def demo(args):
 
                 save_flow(flow, output_dir, base_name, args.format_save, images[0],
                           padder, args.debug)
-                # save_flow(flow_pr, output_dir, base_name, args.format_save, image1,
-                #         padder, args.debug)
+                save_flow(flow_init, output_dir, f"init-{base_name}", args.format_save,
+                          images[0], padder, args.debug)
                 cur_time = time.perf_counter() - s_time
                 total_time += cur_time
                 if not args.all_offprint and not args.time_offprint:
