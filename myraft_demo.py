@@ -49,6 +49,8 @@ def demo(args):
                 images, padder = preprocessing_imgs(images)
 
                 flow, flow_init = final_gen_flow(model, images, args.iters)
+                print(video_id, s_frame, images[0].size(), flow.size(),
+                      flow_init.size())
 
                 output_dir = osp.join(output_path, sequence)
 

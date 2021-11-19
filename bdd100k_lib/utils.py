@@ -59,22 +59,27 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
             flow = upflow8(flow)
         flow_save = viz(image1, flow)
         picfile = osp.join(out_dir, "flow-{}.png".format(base_name))
+        if debug:
+            print("debug:", picfile)
         cv2.imwrite(picfile, flow_save)
     elif format_save == FORMAT_SAVE[FLO_SAVE]:
         if padder is None or type(flow) == list:
             return
         output_file = osp.join(out_dir, "frame-{}.flo".format(base_name))
+        if debug:
+            print("debug:", output_file)
         flow_save = padder.unpad(flow[0]).permute(1, 2, 0).cpu().numpy()
         frame_utils.writeFlow(output_file, flow_save)
 
 
 def preprocessing_imgs(imgs):
-    dim = imgs[0].dim()
+    image1 = imgs[0]
+    dim = image1.dim()
+    device = image1.device
     if dim == 3:
-        imgs = [image[None].cuda() for image in imgs]
+        imgs = [image[None].to(device) for image in imgs]
     elif dim != 4:
         raise NotImplementedError(f"not supported {dim}dims # of dim of images")
-    image1 = imgs[0]
     padder = InputPadder(image1.shape)
     imgs = padder.pad(*imgs)
     return imgs, padder
@@ -143,6 +148,9 @@ def grid_sample_flow(flow, coords_norm):
 
 @torch.no_grad()
 def concat_flow(flows):
+    if len(flows) <= 1:
+        print("not concat")
+        return flows[0]
     _, nb, _, ht, wd = flows.shape
     coords0 = torch.meshgrid(torch.arange(ht), torch.arange(wd))
     coords0 = normalize_coord(

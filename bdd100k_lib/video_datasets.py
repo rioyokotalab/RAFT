@@ -131,11 +131,11 @@ class BDDVideo(data.Dataset):
         self.debug_load_num = debug_load_num
         self.config = f"bdd100k/{subset}"
 
-        self.pil_to_tensor = transforms.ToTensor()
+        self.pil_to_tensor = lambda x: x
         if normalize:
             mean = [0.485, 0.456, 0.406]
             std = [0.229, 0.224, 0.225]
-            trans_tmp = [transforms.ToTensor(), transforms.Normalize(mean, std)]
+            trans_tmp = [transforms.Normalize(mean, std)]
             self.pil_to_tensor = transforms.Compose(trans_tmp)
 
         self.gt_frame = 60  # ground truth mask is given at 10th second
@@ -165,6 +165,11 @@ class BDDVideo(data.Dataset):
         if self.phase == "evaluate" and not os.path.exists(self.mask_path):
             raise FileNotFoundError(f"Annotations folder not found, {dw_msg}")
 
+    def preprocessing_image_for_raft(self, image):
+        image = np.array(image).astype(np.uint8)
+        image = torch.from_numpy(image).permute(2, 0, 1).float()
+        return image
+
     def get_imgs(self, idx, s_frame, num_frames=None):
         if num_frames is None:
             num_frames = self.num_frames
@@ -175,6 +180,7 @@ class BDDVideo(data.Dataset):
             image = Image.open(sequence[i])
             if image.height > image.width:
                 image = image.rotate(90, expand=True)
+            image = self.preprocessing_image_for_raft(image)
             images.append(image)
 
         inputs = [self.pil_to_tensor(image) for image in images]
