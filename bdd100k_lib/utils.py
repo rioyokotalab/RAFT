@@ -1,3 +1,4 @@
+import os
 import os.path as osp
 import pickle
 
@@ -16,7 +17,7 @@ PNG_SAVE = 2
 FLO_SAVE = 3
 
 
-def viz(img, flo, show=False):
+def viz(img, flo, fname="", show=False):
     img = img[0].permute(1, 2, 0).cpu().numpy()
     flo = flo[0].permute(1, 2, 0).cpu().numpy()
 
@@ -30,6 +31,9 @@ def viz(img, flo, show=False):
     if show:
         cv2.imshow("image", img_flo[:, :, [2, 1, 0]] / 255.0)
         cv2.waitKey()
+
+    if fname != "":
+        cv2.imwrite(fname, img_flo[:, :, [2, 1, 0]])
 
     return img_flo[:, :, [2, 1, 0]]
 
@@ -57,10 +61,10 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
         hi, hf = image1.shape[2], flow.shape[2]
         if hf == (hi // 8):
             flow = upflow8(flow)
-        flow_save = viz(image1, flow)
         picfile = osp.join(out_dir, "flow-{}.png".format(base_name))
         if debug:
             print("debug:", picfile)
+        flow_save = viz(image1, flow, fname=picfile)
         cv2.imwrite(picfile, flow_save)
     elif format_save == FORMAT_SAVE[FLO_SAVE]:
         if padder is None or type(flow) == list:
