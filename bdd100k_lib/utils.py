@@ -88,26 +88,32 @@ def preprocessing_imgs(imgs):
     return imgs, padder
 
 
-@torch.no_grad()
-def final_gen_flow(flow_model, imgs, iters=12):
-    s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters)
-    nb = s_img.shape[0]
-    flow_init_tmp = flow_init.permute(0, 2, 3, 1).clone()
+def apply_mask(flow, mask):
+    flow_tmp = flow.permute(0, 2, 3, 1).clone()
     mask_rev = torch.logical_not(mask)
+    nb = flow_tmp.shape[0]
     for idx in range(nb):
-        flow_init_tmp[idx][mask_rev[idx]] = 0
-    flow_init = flow_init_tmp.permute(0, 3, 1, 2).clone()
+        flow_tmp[idx][mask_rev[idx]] = 0
+    return flow_tmp.permute(0, 3, 1, 2)
+
+
+@torch.no_grad()
+def final_gen_flow(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
+    s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters,
+                                                            alpha_1, alpha_2)
+    flow_init = apply_mask(flow_init, mask)
     flow, _ = flow_model(s_img,
                          e_img,
                          iters=iters,
                          flow_init=flow_init,
                          upsample=False,
                          test_mode=True)
+    flow = apply_mask(flow, mask)
     return flow, flow_init
 
 
 @torch.no_grad()
-def gen_flow_correspondence(flow_model, imgs, iters=12):
+def gen_flow_correspondence(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
     flow_model.eval()
     flow_fwds = torch.stack([
         flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[0]
@@ -119,7 +125,8 @@ def gen_flow_correspondence(flow_model, imgs, iters=12):
     ])
     flow_fwd = concat_flow(flow_fwds)
     flow_bwd = concat_flow(flow_bwds)
-    coords0, coords1, mask = forward_backward_consistency(flow_fwd, flow_bwd)
+    coords0, coords1, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1,
+                                                          alpha_2)
     return imgs[0], imgs[-1], flow_fwd, mask
 
 
@@ -165,8 +172,9 @@ def concat_flow(flows):
     return coords1 - coords0
 
 
+# implement: https://www.aaai.org/ocs/index.php/AAAI/AAAI18/paper/viewFile/16502/16319
 @torch.no_grad()
-def forward_backward_consistency(flow_fwd, flow_bwd, alpha=0.2):
+def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5):
     flow_fwd = flow_fwd.detach()
     flow_bwd = flow_bwd.detach()
 
@@ -183,7 +191,7 @@ def forward_backward_consistency(flow_fwd, flow_bwd, alpha=0.2):
     flow_cycle = flow_fwd + flow_bwd_interpolate
 
     flow_cycle_norm = (flow_cycle**2).sum(1)
-    eps = alpha * ((flow_fwd**2).sum(1) + (flow_bwd_interpolate**2).sum(1))
+    eps = alpha_1 * ((flow_fwd**2).sum(1) + (flow_bwd_interpolate**2).sum(1)) + alpha_2
 
     mask = mask & ((flow_cycle_norm - eps) <= 0)
     return coords0, coords1, mask
