@@ -48,7 +48,8 @@ def demo(args):
                 images = [d.to(device, non_blocking=True) for d in images]
                 images, padder = preprocessing_imgs(images)
 
-                flow, flow_init = final_gen_flow(model, images, args.iters)
+                flow, flow_init = final_gen_flow(model, images, args.iters,
+                                                 args.alpha_1, args.alpha_2)
                 print(video_id, s_frame, images[0].size(), flow.size(),
                       flow_init.size())
 
@@ -96,6 +97,14 @@ if __name__ == "__main__":
                         action="store_true",
                         help="use efficent correlation implementation")
     parser.add_argument("--iters", type=int, default=12, help="iteration of flow")
+    parser.add_argument("--alpha_1",
+                        type=float,
+                        default=0.01,
+                        help="cycle consistency coefficient 1")
+    parser.add_argument("--alpha_2",
+                        type=float,
+                        default=0.5,
+                        help="cycle consistency coefficient 2")
     parser.add_argument("--warm-start", action="store_true", help="consider prev flow")
     parser.add_argument("--normalize", action="store_true", help="normalize data")
     parser.add_argument("--n_frames",
