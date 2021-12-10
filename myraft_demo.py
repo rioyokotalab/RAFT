@@ -8,6 +8,7 @@ import torch
 from core.raft import RAFT
 from bdd100k_lib.video_datasets import BDDVideo as BDD
 from bdd100k_lib.utils import final_gen_flow, preprocessing_imgs
+from bdd100k_lib.utils import gen_flow_correspondence
 from bdd100k_lib.utils import save_flow, FORMAT_SAVE
 
 
@@ -48,10 +49,15 @@ def demo(args):
                 images = [d.to(device, non_blocking=True) for d in images]
                 images, padder = preprocessing_imgs(images)
 
-                flow, flow_init = final_gen_flow(model, images, args.iters,
-                                                 args.alpha_1, args.alpha_2)
-                print(video_id, s_frame, images[0].size(), flow.size(),
-                      flow_init.size())
+                if args.no_mask:
+                    _, _, flow_init, _ = gen_flow_correspondence(
+                        model, images, args.iters, args.alpha_1, args.alpha_2)
+                    print(video_id, s_frame, images[0].size(), flow_init.size())
+                else:
+                    flow, flow_init, flow_init_mask = final_gen_flow(
+                        model, images, args.iters, args.alpha_1, args.alpha_2)
+                    print(video_id, s_frame, images[0].size(), flow.size(),
+                          flow_init.size())
 
                 output_dir = osp.join(output_path, sequence)
 
@@ -60,10 +66,13 @@ def demo(args):
 
                 base_name = ("%04d" % (s_frame + 1))
 
-                save_flow(flow, output_dir, base_name, args.format_save, images[0],
-                          padder, args.debug)
-                save_flow(flow_init, output_dir, f"init-{base_name}", args.format_save,
-                          images[0], padder, args.debug)
+                save_flow(flow_init, output_dir, f"init-nomask-{base_name}",
+                          args.format_save, images[0], padder, args.debug)
+                if not args.no_mask:
+                    save_flow(flow, output_dir, base_name, args.format_save, images[0],
+                              padder, args.debug)
+                    save_flow(flow_init_mask, output_dir, f"init-{base_name}",
+                              args.format_save, images[0], padder, args.debug)
                 cur_time = time.perf_counter() - s_time
                 total_time += cur_time
                 if not args.all_offprint and not args.time_offprint:
@@ -105,6 +114,7 @@ if __name__ == "__main__":
                         type=float,
                         default=0.5,
                         help="cycle consistency coefficient 2")
+    parser.add_argument("--no_mask", action="store_true", help="not mask process")
     parser.add_argument("--warm-start", action="store_true", help="consider prev flow")
     parser.add_argument("--normalize", action="store_true", help="normalize data")
     parser.add_argument("--n_frames",

@@ -101,15 +101,15 @@ def apply_mask(flow, mask):
 def final_gen_flow(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
     s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters,
                                                             alpha_1, alpha_2)
-    flow_init = apply_mask(flow_init, mask)
+    flow_init_mask = apply_mask(flow_init, mask)
     flow, _ = flow_model(s_img,
                          e_img,
                          iters=iters,
-                         flow_init=flow_init,
+                         flow_init=flow_init_mask,
                          upsample=False,
                          test_mode=True)
     flow = apply_mask(flow, mask)
-    return flow, flow_init
+    return flow, flow_init, flow_init_mask
 
 
 @torch.no_grad()
