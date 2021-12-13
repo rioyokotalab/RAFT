@@ -91,9 +91,10 @@ def preprocessing_imgs(imgs):
 def apply_mask(flow, mask):
     flow_tmp = flow.permute(0, 2, 3, 1).clone()
     mask_rev = torch.logical_not(mask)
-    nb = flow_tmp.shape[0]
-    for idx in range(nb):
-        flow_tmp[idx][mask_rev[idx]] = 0
+    # nb = flow_tmp.shape[0]
+    # for idx in range(nb):
+    #     flow_tmp[idx][mask_rev[idx]] = 0
+    flow_tmp[mask_rev] = 0
     return flow_tmp.permute(0, 3, 1, 2)
 
 
@@ -158,9 +159,6 @@ def grid_sample_flow(flow, coords_norm):
 
 @torch.no_grad()
 def concat_flow(flows):
-    if len(flows) <= 1:
-        print("not concat")
-        return flows[0]
     _, nb, _, ht, wd = flows.shape
     coords0 = torch.meshgrid(torch.arange(ht), torch.arange(wd))
     coords0 = normalize_coord(
