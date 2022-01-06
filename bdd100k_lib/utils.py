@@ -100,21 +100,32 @@ def apply_mask(flow, mask):
 
 @torch.no_grad()
 def final_gen_flow(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
-    s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters,
-                                                            alpha_1, alpha_2)
-    flow_init_mask = apply_mask(flow_init, mask)
-    flow, _ = flow_model(s_img,
-                         e_img,
-                         iters=iters,
-                         flow_init=flow_init_mask,
-                         upsample=False,
-                         test_mode=True)
-    flow = apply_mask(flow, mask)
-    return flow, flow_init, flow_init_mask
+    # s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters,
+    #                                                         alpha_1, alpha_2)
+    # flow_init_mask = apply_mask(flow_init, mask)
+    s_img, e_img = imgs[0], imgs[-1]
+    flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters)
+    flow_fwd, _ = flow_model(s_img,
+                             e_img,
+                             iters=iters,
+                             flow_init=flow_fwd_init,
+                             upsample=False,
+                             test_mode=True)
+    flow_bwd, _ = flow_model(e_img,
+                             s_img,
+                             iters=iters,
+                             flow_init=flow_bwd_init,
+                             upsample=False,
+                             test_mode=True)
+    flow_fwd = concat_flow(flow_fwd)
+    flow_bwd = concat_flow(flow_bwd)
+    _, _, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1, alpha_2)
+    flow_fwd_mask = apply_mask(flow_fwd, mask)
+    return flow_fwd_mask, flow_fwd_init, flow_fwd
 
 
 @torch.no_grad()
-def gen_flow_correspondence(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
+def gen_flows(flow_model, imgs, iters=12):
     flow_model.eval()
     flow_fwds = torch.stack([
         flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[0]
@@ -126,6 +137,12 @@ def gen_flow_correspondence(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.
     ])
     flow_fwd = concat_flow(flow_fwds)
     flow_bwd = concat_flow(flow_bwds)
+    return flow_fwd, flow_bwd
+
+
+@torch.no_grad()
+def gen_flow_correspondence(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
+    flow_fwd, flow_bwd = gen_flows(flow_model, imgs, iters)
     coords0, coords1, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1,
                                                           alpha_2)
     return imgs[0], imgs[-1], flow_fwd, mask

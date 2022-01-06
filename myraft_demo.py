@@ -66,12 +66,12 @@ def demo(args):
 
                 base_name = ("%04d" % (s_frame + 1))
 
-                save_flow(flow_init, output_dir, f"init-nomask-{base_name}",
+                save_flow(flow_init, output_dir, f"onlycat-{base_name}",
                           args.format_save, images[0], padder, args.debug)
                 if not args.no_mask:
-                    save_flow(flow, output_dir, base_name, args.format_save, images[0],
-                              padder, args.debug)
-                    save_flow(flow_init_mask, output_dir, f"init-{base_name}",
+                    save_flow(flow, output_dir, f"cat-mask-{base_name}",
+                              args.format_save, images[0], padder, args.debug)
+                    save_flow(flow_init_mask, output_dir, f"cat-nomask-{base_name}",
                               args.format_save, images[0], padder, args.debug)
                 cur_time = time.perf_counter() - s_time
                 total_time += cur_time
