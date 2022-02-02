@@ -99,12 +99,13 @@ def apply_mask(flow, mask):
 
 
 @torch.no_grad()
-def final_gen_flow(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
+def final_gen_flow(flow_model, imgs, iters=12, up=False, alpha_1=0.01, alpha_2=0.5):
     # s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters,
-    #                                                         alpha_1, alpha_2)
+    #                                                         up, alpha_1, alpha_2)
     # flow_init_mask = apply_mask(flow_init, mask)
     s_img, e_img = imgs[0], imgs[-1]
     flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters)
+    # flow_fwd_init = flow_init
     flow_fwd, _ = flow_model(s_img,
                              e_img,
                              iters=iters,
@@ -125,14 +126,15 @@ def final_gen_flow(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
 
 
 @torch.no_grad()
-def gen_flows(flow_model, imgs, iters=12):
+def gen_flows(flow_model, imgs, iters=12, up=False):
+    index = 1 if up else 0
     flow_model.eval()
     flow_fwds = torch.stack([
-        flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[0]
+        flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[index]
         for img0, img1 in zip(imgs[:-1], imgs[1:])
     ])
     flow_bwds = torch.stack([
-        flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[0]
+        flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[index]
         for img0, img1 in zip(imgs[1:][::-1], imgs[:-1][::-1])
     ])
     flow_fwd = concat_flow(flow_fwds)
@@ -141,8 +143,13 @@ def gen_flows(flow_model, imgs, iters=12):
 
 
 @torch.no_grad()
-def gen_flow_correspondence(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
-    flow_fwd, flow_bwd = gen_flows(flow_model, imgs, iters)
+def gen_flow_correspondence(flow_model,
+                            imgs,
+                            iters=12,
+                            up=False,
+                            alpha_1=0.01,
+                            alpha_2=0.5):
+    flow_fwd, flow_bwd = gen_flows(flow_model, imgs, iters, up)
     coords0, coords1, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1,
                                                           alpha_2)
     return imgs[0], imgs[-1], flow_fwd, mask
