@@ -118,7 +118,7 @@ def final_gen_flow(flow_model, imgs, iters=12, alpha_1=0.01, alpha_2=0.5):
                              upsample=False,
                              test_mode=True)
     flow_fwd = concat_flow(torch.stack([flow_fwd]))
-    flow_bwd = concat_flow(torch.stack([flow_fwd]))
+    flow_bwd = concat_flow(torch.stack([flow_bwd]))
     _, _, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1, alpha_2)
     flow_fwd_mask = apply_mask(flow_fwd, mask)
     return flow_fwd_mask, flow_fwd_init, flow_fwd
