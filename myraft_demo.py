@@ -51,11 +51,13 @@ def demo(args):
 
                 if args.no_mask:
                     _, _, flow_init, _ = gen_flow_correspondence(
-                        model, images, args.iters, args.alpha_1, args.alpha_2)
+                        model, images, args.iters, args.upflow, args.alpha_1,
+                        args.alpha_2)
                     print(video_id, s_frame, images[0].size(), flow_init.size())
                 else:
                     flow, flow_init, flow_init_mask = final_gen_flow(
-                        model, images, args.iters, args.alpha_1, args.alpha_2)
+                        model, images, args.iters, args.upflow, args.alpha_1,
+                        args.alpha_2)
                     print(video_id, s_frame, images[0].size(), flow.size(),
                           flow_init.size())
 
@@ -115,6 +117,7 @@ if __name__ == "__main__":
                         default=0.5,
                         help="cycle consistency coefficient 2")
     parser.add_argument("--no_mask", action="store_true", help="not mask process")
+    parser.add_argument("--upflow", action="store_true", help="output up flow")
     parser.add_argument("--warm-start", action="store_true", help="consider prev flow")
     parser.add_argument("--normalize", action="store_true", help="normalize data")
     parser.add_argument("--n_frames",
