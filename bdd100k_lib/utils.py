@@ -100,9 +100,9 @@ def apply_mask(flow, mask):
 
 @torch.no_grad()
 def final_gen_flow(flow_model, imgs, iters=12, up=False, alpha_1=0.01, alpha_2=0.5):
-    # s_img, e_img, flow_init, mask = gen_flow_correspondence(flow_model, imgs, iters,
-    #                                                         up, alpha_1, alpha_2)
-    # flow_init_mask = apply_mask(flow_init, mask)
+    s_img, e_img, flow_onlycat, mask = gen_flow_correspondence(
+        flow_model, imgs, iters, up, alpha_1, alpha_2)
+    flow_cat_mask = apply_mask(flow_onlycat, mask)
     s_img, e_img = imgs[0], imgs[-1]
     flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters)
     # flow_fwd_init = flow_init
@@ -122,7 +122,7 @@ def final_gen_flow(flow_model, imgs, iters=12, up=False, alpha_1=0.01, alpha_2=0
     flow_bwd = concat_flow(torch.stack([flow_bwd]))
     _, _, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1, alpha_2)
     flow_fwd_mask = apply_mask(flow_fwd, mask)
-    return flow_fwd_mask, flow_fwd_init, flow_fwd
+    return flow_fwd_mask, flow_fwd_init, flow_fwd, flow_onlycat, flow_cat_mask
 
 
 @torch.no_grad()

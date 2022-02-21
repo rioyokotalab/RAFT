@@ -50,16 +50,21 @@ def demo(args):
                 images, padder = preprocessing_imgs(images)
 
                 if args.no_mask:
-                    _, _, flow_init, _ = gen_flow_correspondence(
+                    _, _, flow_onlycat_init, _ = gen_flow_correspondence(
                         model, images, args.iters, args.upflow, args.alpha_1,
                         args.alpha_2)
-                    print(video_id, s_frame, images[0].size(), flow_init.size())
+                    print(video_id, s_frame, images[0].size(), flow_onlycat_init.size())
                 else:
-                    flow, flow_init, flow_init_mask = final_gen_flow(
-                        model, images, args.iters, args.upflow, args.alpha_1,
-                        args.alpha_2)
-                    print(video_id, s_frame, images[0].size(), flow.size(),
-                          flow_init.size())
+                    output_flows = final_gen_flow(model, images, args.iters,
+                                                  args.upflow, args.alpha_1,
+                                                  args.alpha_2)
+                    flow_recompute_mask = output_flows[0]
+                    flow_onlycat_init = output_flows[1]
+                    flow_cat_nomask_recompute = output_flows[2]
+                    flow_onlycat = output_flows[3]
+                    flow_cat_mask = output_flows[4]
+                    print(video_id, s_frame, images[0].size(),
+                          flow_recompute_mask.size(), flow_onlycat_init.size())
 
                 output_dir = osp.join(output_path, sequence)
 
@@ -68,12 +73,18 @@ def demo(args):
 
                 base_name = ("%04d" % (s_frame + 1))
 
-                save_flow(flow_init, output_dir, f"onlycat-{base_name}",
+                save_flow(flow_onlycat_init, output_dir, f"onlycat-init-{base_name}",
                           args.format_save, images[0], padder, args.debug)
                 if not args.no_mask:
-                    save_flow(flow, output_dir, f"cat-mask-{base_name}",
+                    save_flow(flow_recompute_mask, output_dir,
+                              f"recompute-mask-{base_name}", args.format_save,
+                              images[0], padder, args.debug)
+                    save_flow(flow_cat_nomask_recompute, output_dir,
+                              f"recompute-nomask-{base_name}", args.format_save,
+                              images[0], padder, args.debug)
+                    save_flow(flow_cat_mask, output_dir, f"onlycat-mask-{base_name}",
                               args.format_save, images[0], padder, args.debug)
-                    save_flow(flow_init_mask, output_dir, f"cat-nomask-{base_name}",
+                    save_flow(flow_onlycat, output_dir, f"onlycat-nomask-{base_name}",
                               args.format_save, images[0], padder, args.debug)
                 cur_time = time.perf_counter() - s_time
                 total_time += cur_time
