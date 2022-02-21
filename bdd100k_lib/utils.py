@@ -72,6 +72,8 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
         if debug:
             print("debug:", output_file)
         flow_save = padder.unpad(flow[0]).permute(1, 2, 0).cpu().numpy()
+        # denormalize flow
+        flow_save = denormalize_flow(flow_save)
         frame_utils.writeFlow(output_file, flow_save)
 
 
@@ -162,6 +164,14 @@ def normalize_coord(coords):
     coords_norm[:, 0] = 2 * coords_norm[:, 0] / (wd - 1) - 1
     coords_norm[:, 1] = 2 * coords_norm[:, 1] / (ht - 1) - 1
     return coords_norm
+
+
+def denormalize_flow(flow_norm):
+    _, _, ht, wd = flow_norm.shape
+    flow = flow_norm.clone()
+    flow[:, 0] = (flow[:, 0] * (wd - 1)) / 2
+    flow[:, 1] = (flow[:, 1] * (ht - 1)) / 2
+    return flow_norm
 
 
 @torch.no_grad()
