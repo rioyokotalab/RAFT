@@ -37,6 +37,17 @@ def viz(img, flo, fname="", show=False):
     return img_flo[:, :, [2, 1, 0]]
 
 
+def vizes(imgs, flos, fname="", show=False):
+    img_flo_list = []
+    for i, (img, flo) in enumerate(zip(imgs, flos)):
+        local_fname = fname
+        if fname != "":
+            local_fname = f"{i}-{fname}"
+        local_img_flo = viz(img, flo, fname, local_fname, show)
+        img_flo_list.append(local_img_flo)
+    return np.array(img_flo_list)
+
+
 def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
     if format_save == FORMAT_SAVE[PICKLE_SAVE]:
         picfile = osp.join(out_dir, "flow-{}.binaryfile".format(base_name))
@@ -71,10 +82,29 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
         output_file = osp.join(out_dir, "frame-{}.flo".format(base_name))
         if debug:
             print("debug:", output_file)
-        flow_save = padder.unpad(flow[0]).permute(1, 2, 0).cpu().numpy()
         # denormalize flow
-        flow_save = denormalize_flow(flow_save)
-        frame_utils.writeFlow(output_file, flow_save)
+        flow = denormalize_flow(flow)
+        flow_save_list = []
+        is_one_flow = flow.ndim == 3 or (flow.ndim == 4 and flow.shape[0] == 1)
+        if is_one_flow:
+            flow_save = flow if flow.ndim == 3 else flow[0]
+            flow_save = padder.unpad(flow_save).permute(1, 2, 0).cpu().numpy()
+            flow_save_list.append(flow_save)
+        elif flow.ndim == 4:
+            nb = flow.shape[0]
+            if nb > 1:
+                for i in range(nb):
+                    flow_tmp = flow[i]
+                    flow_save = padder.unpad(flow_tmp).permute(1, 2, 0).cpu().numpy()
+                    flow_save_list.append(flow_save)
+        num_flow = len(flow_save_list)
+        if num_flow == 1:
+            frame_utils.writeFlow(output_file, flow_save_list[0])
+        else:
+            for i, flow_save in enumerate(flow_save_list):
+                local_base = f"{i}-{base_name}"
+                output_file = osp.join(out_dir, "frame-{}.flo".format(local_base))
+                frame_utils.writeFlow(output_file, flow_save_list[i])
 
 
 def preprocessing_imgs(imgs):
