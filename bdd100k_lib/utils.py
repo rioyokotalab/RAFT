@@ -201,7 +201,7 @@ def denormalize_flow(flow_norm):
     flow = flow_norm.clone()
     flow[:, 0] = (flow[:, 0] * (wd - 1)) / 2
     flow[:, 1] = (flow[:, 1] * (ht - 1)) / 2
-    return flow_norm
+    return flow
 
 
 @torch.no_grad()
