@@ -48,6 +48,7 @@ def viz(img=None, flo=None, imfile=None, upsample=True):
 
 def demo(args):
 
+    print("start", args.flow_path)
     result_path = args.result
     os.makedirs(result_path, exist_ok=True)
     flows = glob.glob(os.path.join(args.flow_path, "*.pth"))
@@ -58,6 +59,7 @@ def demo(args):
 
     flows = sorted(flows)
     images = sorted(images)
+    all_max, all_min = None, None
     for flofile, imfile1, imfile2 in zip(flows, images[:-1], images[1:]):
         flow_low = torch.load(flofile, map_location=torch.device(DEVICE))
         image1 = None if args.image_path is None else load_image(imfile1)
@@ -65,8 +67,18 @@ def demo(args):
             image2 = load_image(imfile2)
             padder = InputPadder(image1.shape)
             image1, _ = padder.pad(image1, image2)
-        save_imfile = result_path + "flow-img" + os.path.basename(imfile1)
-        viz(image1, flow_low, save_imfile, True)
+        flow_max = torch.max(flow_low.reshape(-1))
+        flow_min = torch.min(flow_low.reshape(-1))
+        if all_max is None or all_min is None:
+            all_max = flow_max.item()
+            all_min = flow_min.item()
+        else:
+            all_max = max(all_max, flow_max.item())
+            all_min = min(all_min, flow_min.item())
+        # save_imfile = result_path + "flow-img" + os.path.basename(imfile1)
+        print("flow val", flow_max, flow_min)
+        # viz(image1, flow_low, save_imfile, True)
+    print("all val", all_max, all_min)
 
 
 if __name__ == "__main__":
