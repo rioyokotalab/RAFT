@@ -131,12 +131,18 @@ def apply_mask(flow, mask):
 
 
 @torch.no_grad()
-def final_gen_flow(flow_model, imgs, iters=12, up=False, alpha_1=0.01, alpha_2=0.5):
+def final_gen_flow(flow_model,
+                   imgs,
+                   iters=12,
+                   up=False,
+                   alpha_1=0.01,
+                   alpha_2=0.5,
+                   is_normalize=True):
     s_img, e_img, flow_onlycat, mask = gen_flow_correspondence(
-        flow_model, imgs, iters, up, alpha_1, alpha_2)
+        flow_model, imgs, iters, up, alpha_1, alpha_2, is_normalize)
     flow_cat_mask = apply_mask(flow_onlycat, mask)
     s_img, e_img = imgs[0], imgs[-1]
-    flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters)
+    flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters, is_normalize)
     # flow_fwd_init = flow_init
     flow_fwd, _ = flow_model(s_img,
                              e_img,
@@ -150,15 +156,16 @@ def final_gen_flow(flow_model, imgs, iters=12, up=False, alpha_1=0.01, alpha_2=0
                              flow_init=flow_bwd_init,
                              upsample=False,
                              test_mode=True)
-    flow_fwd = concat_flow(torch.stack([flow_fwd]))
-    flow_bwd = concat_flow(torch.stack([flow_bwd]))
-    _, _, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1, alpha_2)
+    flow_fwd = concat_flow(torch.stack([flow_fwd]), is_normalize)
+    flow_bwd = concat_flow(torch.stack([flow_bwd]), is_normalize)
+    _, _, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1, alpha_2,
+                                              not is_normalize)
     flow_fwd_mask = apply_mask(flow_fwd, mask)
     return flow_fwd_mask, flow_fwd_init, flow_fwd, flow_onlycat, flow_cat_mask
 
 
 @torch.no_grad()
-def gen_flows(flow_model, imgs, iters=12, up=False):
+def gen_flows(flow_model, imgs, iters=12, up=False, is_normalize=True):
     index = 1 if up else 0
     flow_model.eval()
     flow_fwds = torch.stack([
@@ -169,8 +176,8 @@ def gen_flows(flow_model, imgs, iters=12, up=False):
         flow_model(img0, img1, iters=iters, upsample=False, test_mode=True)[index]
         for img0, img1 in zip(imgs[1:][::-1], imgs[:-1][::-1])
     ])
-    flow_fwd = concat_flow(flow_fwds)
-    flow_bwd = concat_flow(flow_bwds)
+    flow_fwd = concat_flow(flow_fwds, is_normalize)
+    flow_bwd = concat_flow(flow_bwds, is_normalize)
     return flow_fwd, flow_bwd
 
 
@@ -180,10 +187,11 @@ def gen_flow_correspondence(flow_model,
                             iters=12,
                             up=False,
                             alpha_1=0.01,
-                            alpha_2=0.5):
-    flow_fwd, flow_bwd = gen_flows(flow_model, imgs, iters, up)
+                            alpha_2=0.5,
+                            is_normalize=True):
+    flow_fwd, flow_bwd = gen_flows(flow_model, imgs, iters, up, is_normalize)
     coords0, coords1, mask = forward_backward_consistency(flow_fwd, flow_bwd, alpha_1,
-                                                          alpha_2)
+                                                          alpha_2, not is_normalize)
     return imgs[0], imgs[-1], flow_fwd, mask
 
 
@@ -222,29 +230,38 @@ def grid_sample_flow(flow, coords_norm):
 
 
 @torch.no_grad()
-def concat_flow(flows):
+def concat_flow(flows, is_normalize=True):
     _, nb, _, ht, wd = flows.shape
     coords0 = torch.meshgrid(torch.arange(ht), torch.arange(wd))
-    coords0 = normalize_coord(
-        torch.stack(coords0[::-1], dim=0).float().repeat(nb, 1, 1, 1)).to(flows.device)
+    coords0 = torch.stack(coords0[::-1], dim=0).float().repeat(nb, 1, 1, 1)
+    if is_normalize:
+        coords0 = normalize_coord(coords0)
+    coords0 = coords0.to(flows.device)
     coords1 = coords0.clone()
     for flow in flows:
-        flow_interpolate = grid_sample_flow(normalize_flow(flow), coords1)
+        tmp_flow = normalize_flow(flow) if is_normalize else flow
+        flow_interpolate = grid_sample_flow(tmp_flow, coords1)
         coords1 = coords1 + flow_interpolate
     return coords1 - coords0
 
 
 # implement: https://www.aaai.org/ocs/index.php/AAAI/AAAI18/paper/viewFile/16502/16319
 @torch.no_grad()
-def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5):
+def forward_backward_consistency(flow_fwd,
+                                 flow_bwd,
+                                 alpha_1=0.01,
+                                 alpha_2=0.5,
+                                 is_normalize_flow=False):
     flow_fwd = flow_fwd.detach()
     flow_bwd = flow_bwd.detach()
+    flow_fwd = normalize_flow(flow_fwd) if is_normalize_flow else flow_fwd
+    flow_bwd = normalize_flow(flow_bwd) if is_normalize_flow else flow_bwd
 
     nb, _, ht, wd = flow_fwd.shape
     coords0 = torch.meshgrid(torch.arange(ht), torch.arange(wd))
-    coords0 = normalize_coord(
-        torch.stack(coords0[::-1], dim=0).float().repeat(nb, 1, 1,
-                                                         1)).to(flow_fwd.device)
+    coords0 = torch.stack(coords0[::-1], dim=0).float().repeat(nb, 1, 1, 1)
+    coords0 = normalize_coord(coords0)
+    coords0 = coords0.to(flow_fwd.device)
 
     coords1 = coords0 + flow_fwd
     mask = (torch.abs(coords1[:, 0]) < 1) & (torch.abs(coords1[:, 1]) < 1)

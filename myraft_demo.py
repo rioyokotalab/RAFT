@@ -52,12 +52,13 @@ def demo(args):
                 if args.no_mask:
                     _, _, flow_onlycat_init, _ = gen_flow_correspondence(
                         model, images, args.iters, args.upflow, args.alpha_1,
-                        args.alpha_2)
+                        args.alpha_2, not args.not_normalize_flow)
                     print(video_id, s_frame, images[0].size(), flow_onlycat_init.size())
                 else:
                     output_flows = final_gen_flow(model, images, args.iters,
                                                   args.upflow, args.alpha_1,
-                                                  args.alpha_2)
+                                                  args.alpha_2,
+                                                  not args.not_normalize_flow)
                     flow_recompute_mask = output_flows[0]
                     flow_onlycat_init = output_flows[1]
                     flow_cat_nomask_recompute = output_flows[2]
@@ -131,6 +132,9 @@ if __name__ == "__main__":
     parser.add_argument("--upflow", action="store_true", help="output up flow")
     parser.add_argument("--warm-start", action="store_true", help="consider prev flow")
     parser.add_argument("--normalize", action="store_true", help="normalize data")
+    parser.add_argument("--not_normalize_flow",
+                        action="store_true",
+                        help="don't 'normalize flow")
     parser.add_argument("--n_frames",
                         type=int,
                         default=15,
