@@ -83,7 +83,7 @@ def save_flow(flow, out_dir, base_name, format_save, image1, padder, debug):
         if debug:
             print("debug:", output_file)
         # denormalize flow
-        flow = denormalize_flow(flow)
+        # flow = denormalize_flow(flow)
         flow_save_list = []
         is_one_flow = flow.ndim == 3 or (flow.ndim == 4 and flow.shape[0] == 1)
         if is_one_flow:
