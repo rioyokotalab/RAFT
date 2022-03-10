@@ -142,7 +142,7 @@ def final_gen_flow(flow_model,
         flow_model, imgs, iters, up, alpha_1, alpha_2, is_normalize)
     flow_cat_mask = apply_mask(flow_onlycat, mask)
     s_img, e_img = imgs[0], imgs[-1]
-    flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters, is_normalize)
+    flow_fwd_init, flow_bwd_init = gen_flows(flow_model, imgs, iters, up, is_normalize)
     # flow_fwd_init = flow_init
     flow_fwd, _ = flow_model(s_img,
                              e_img,
