@@ -17,12 +17,18 @@ def demo(args):
 
     print("torch start: ", len(torch_list))
     s_time = time.time()
+    max_tmp = None
     for imfile in torch_list:
-        d = torch.load(imfile)
+        d = torch.load(imfile, map_location="cpu")
         if type(d) is list:
             print(imfile, type(d), len(d), d[0].size())
         else:
-            print(imfile, type(d), d[0].size())
+            local_max = torch.max(d.reshape(-1)).item()
+            if max_tmp is None:
+                max_tmp = local_max
+            else:
+                max_tmp = max(local_max, max_tmp)
+            print(imfile, type(d), d[0].size(), local_max)
     torch_time = time.time() - s_time
     print("pickle start: ", len(pickle_list))
     s_time = time.time()
@@ -34,7 +40,7 @@ def demo(args):
         else:
             print(imfile, type(d), d[0].size())
     pickle_time = time.time() - s_time
-    print("torch: ", torch_time, "pickle: ", pickle_time)
+    print("torch: ", torch_time, "pickle: ", pickle_time, "max:", max_tmp)
 
 
 if __name__ == '__main__':
