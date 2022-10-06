@@ -14,6 +14,42 @@ from core.utils.utils import InputPadder
 
 DEVICE = 'cuda'
 
+
+@torch.no_grad()
+def calc_optical_flow(imgs, flow_model, is_norm=False, up=False, verbose=False):
+    num_img = len(imgs)
+    if verbose:
+        orig_im1, orig_im2 = imgs[0].clone(), imgs[-1].clone()
+    i = 1 if up else 0
+    flow_model.eval()
+    flow_fwds = torch.stack([
+        flow_model(img0, img1, upsample=False, test_mode=True)[i]
+        for img0, img1 in zip(imgs[:-1], imgs[1:])
+    ])
+    flow_bwds = torch.stack([
+        flow_model(img0, img1, upsample=False, test_mode=True)[i]
+        for img0, img1 in zip(imgs[1:][::-1], imgs[:-1][::-1])
+    ])
+    flow_fwd = flow_fwds[0].cuda()
+    flow_bwd = flow_bwds[0].cuda()
+    if num_img > 2:
+        flow_fwds = flow_fwds.cuda()
+        flow_bwds = flow_bwds.cuda()
+        flow_fwd = concat_flow(flow_fwds, is_norm)
+        flow_bwd = concat_flow(flow_bwds, is_norm)
+    elif is_norm:
+        flow_fwd = normalize_flow(flow_fwd)
+        flow_bwd = normalize_flow(flow_bwd)
+    if verbose:
+        rank = dist.get_rank()
+        print(f"rank: {rank} orig_im1: {orig_im1.dtype} orig_im2: {orig_im2.dtype}")
+        print(f"rank: {rank} orig_im1: {orig_im1.shape}", orig_im1.tolist())
+        print(f"rank: {rank} orig_im2: {orig_im2.shape}", orig_im2.tolist())
+        print(f"rank: {rank} flow_fwd: {flow_fwd.shape}", flow_fwd.tolist())
+        print(f"rank: {rank} flow_bwd: {flow_bwd.shape}", flow_bwd.tolist())
+    return flow_fwd, flow_bwd
+
+
 # implement: https://arxiv.org/pdf/1711.07837.pdf
 @torch.no_grad()
 def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5,
@@ -180,6 +216,33 @@ def mask_flow(flow, mask, is_use_norm=False, is_mask_norm_use_norm=False,
 
 
 @torch.no_grad()
+def concat_flow(flows, is_norm=False):
+    _, nb, _, ht, wd = flows.shape
+    coords0 = torch.meshgrid(torch.arange(ht), torch.arange(wd))
+    coords0 = torch.stack(coords0[::-1], dim=0).float().repeat(nb, 1, 1, 1)
+    coords0 = coords0.to(flows.device)
+    coords0_norm = normalize_coord(coords0)
+    coords1 = coords0.clone()
+    coords1_norm = coords0_norm.clone()
+    for flow in flows:
+        if is_norm:
+            flow_norm = normalize_flow(flow)
+            flow_interpolate_norm = F.grid_sample(flow_norm, coords1_norm.permute(0, 2, 3, 1), align_corners=True)
+            coords1_norm = coords1_norm + flow_interpolate_norm
+        else:
+            coords1_norm_tmp = normalize_coord(coords1)
+            flow_interpolate = F.grid_sample(flow, coords1_norm_tmp.permute(0, 2, 3, 1), align_corners=True)
+            coords1 = coords1 + flow_interpolate
+
+    if is_norm:
+        out_flow = coords1_norm - coords0_norm
+    else:
+        out_flow = coords1 - coords0
+
+    return out_flow
+
+
+@torch.no_grad()
 def normalize_coord(coords):
     _, _, ht, wd = coords.shape
     coords_norm = coords.clone()
@@ -221,6 +284,10 @@ def load_image(imfile):
     img = torch.from_numpy(img).permute(2, 0, 1).float()
     return img[None].to(DEVICE)
     # return img[None].cuda()
+
+
+def load_images(imfiles):
+    return [load_image(imfile) for imfile in imfiles]
 
 
 def viz(img, flo, fname=""):
@@ -357,6 +424,7 @@ def demo(args):
     is_alpha2_scale = args.is_alpha2_scale
     is_kitti = args.is_kitti
     mode = 'sintel'
+    n_frames = args.n_frames
     # mode = 'kitti' if is_kitti else 'sintel'
 
     with torch.no_grad():
@@ -367,9 +435,12 @@ def demo(args):
         len_img = len(images)
         print(f"len_img: {len_img}")
         # images = [images[0], images[-1]]
-        for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
+        # for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
+        for i in range(len_img - n_frames):
+            imfiles = images[i:i+n_frames]
             if is_kitti and i % 2 == 1:
                 continue
+            imfile1, imfile2 = imfiles[0], imfiles[-1]
             imbase1 = os.path.basename(imfile1)
             imbase2 = os.path.basename(imfile2)
             fname = f"{imbase1}_{imbase2}_warp.png"
@@ -400,29 +471,42 @@ def demo(args):
             fname3_mask = os.path.join(out_root, fname3_mask)
             fname4 = os.path.join(out_root, fname4)
             fname5 = os.path.join(out_root, fname5)
-            image1 = load_image(imfile1)
-            image2 = load_image(imfile2)
+            # image1 = load_image(imfile1)
+            # image2 = load_image(imfile2)
+            l_images = load_images(imfiles)
+            image1, image2 = l_images[0], l_images[-1]
 
             padder = InputPadder(image1.shape, mode=mode)
-            image1, image2 = padder.pad(image1, image2)
+            l_images = padder.pad(*l_images)
 
             # flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
-            flow_low, flow_up = model(image1, image2, test_mode=True)
-            flow_low_bwd, flow_up_bwd = model(image2, image1, test_mode=True)
+            # flow_low, flow_up = model(image1, image2, test_mode=True)
+            # flow_low_bwd, flow_up_bwd = model(image2, image1, test_mode=True)
+            # if is_norm:
+            #     flow_up_norm = normalize_flow(flow_up)
+            #     flow_up_bwd_norm = normalize_flow(flow_up_bwd)
+            #     flow_up_tmp = flow_up_norm.clone()
+            #     flow_up_bwd_tmp = flow_up_bwd_norm.clone()
+            #     flow_up_norm_denorm = denormalize_flow(flow_up_norm)
+            #     # flow_up_norm_denorm_rev = denormalize_flow(flow_up_norm, True)
+            #     # print("flow_up:", flow_up.tolist())
+            #     # print("flow_up_norm_denorm:", flow_up_norm_denorm.tolist())
+            #     # print("flow_up_norm_denorm_rev:", flow_up_norm_denorm_rev.tolist())
+            #     # print("flow_up sum:", flow_up.sum())
+            #     # print("flow_up_norm_denorm sum:", flow_up_norm_denorm.sum())
+            #     # print("flow_up_norm_denorm_rev sum:", flow_up_norm_denorm_rev.sum())
+            #     # print((flow_up == flow_up_norm_denorm).tolist())
+            # else:
+            #     flow_up_tmp = flow_up.clone()
+            #     flow_up_bwd_tmp = flow_up_bwd.clone()
+            flow_up, flow_up_bwd = calc_optical_flow(l_images, model, is_norm=is_norm, up=True)
             if is_norm:
-                flow_up_norm = normalize_flow(flow_up)
-                flow_up_bwd_norm = normalize_flow(flow_up_bwd)
+                flow_up_norm = flow_up.clone()
+                flow_up_bwd_norm = flow_up_bwd.clone()
+                flow_up = denormalize_flow(flow_up)
+                flow_up_bwd = denormalize_flow(flow_up_bwd)
                 flow_up_tmp = flow_up_norm.clone()
                 flow_up_bwd_tmp = flow_up_bwd_norm.clone()
-                flow_up_norm_denorm = denormalize_flow(flow_up_norm)
-                # flow_up_norm_denorm_rev = denormalize_flow(flow_up_norm, True)
-                # print("flow_up:", flow_up.tolist())
-                # print("flow_up_norm_denorm:", flow_up_norm_denorm.tolist())
-                # print("flow_up_norm_denorm_rev:", flow_up_norm_denorm_rev.tolist())
-                # print("flow_up sum:", flow_up.sum())
-                # print("flow_up_norm_denorm sum:", flow_up_norm_denorm.sum())
-                # print("flow_up_norm_denorm_rev sum:", flow_up_norm_denorm_rev.sum())
-                # print((flow_up == flow_up_norm_denorm).tolist())
             else:
                 flow_up_tmp = flow_up.clone()
                 flow_up_bwd_tmp = flow_up_bwd.clone()
@@ -491,6 +575,7 @@ if __name__ == '__main__':
                         help='use efficent correlation implementation')
     parser.add_argument('--out_path', help="out path")
     parser.add_argument('--alpha', nargs=2, type=float, default=[0.01, 0.5], help="out path")
+    parser.add_argument('--n_frames', type=int, default=2, help="num frames")
     parser.add_argument('--not_calc_norm_flow', action='store_true')
     parser.add_argument('--is_not_cycle_norm', action='store_true')
     parser.add_argument('--is_not_coord_norm', action='store_true')
