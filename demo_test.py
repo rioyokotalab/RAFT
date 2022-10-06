@@ -436,7 +436,7 @@ def demo(args):
         print(f"len_img: {len_img}")
         # images = [images[0], images[-1]]
         # for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
-        for i in range(len_img - n_frames):
+        for i in range(len_img - n_frames + 1):
             imfiles = images[i:i+n_frames]
             if is_kitti and i % 2 == 1:
                 continue
@@ -523,34 +523,34 @@ def demo(args):
             # flow_fwd_mask, flow_fwd_mask_norm = flow_fwd_mask
             # flow_bwd_mask, flow_bwd_mask_norm = flow_bwd_mask
             flo_img = viz(image1, flow_up, fname2)
-            flo_img_bwd = viz(image1, flow_up_bwd, fname3)
+            flo_img_bwd = viz(image2, flow_up_bwd, fname3)
             concat_img(image1[0], flo_img, fname2_mask, mask[0])
-            concat_img(image1[0], flo_img_bwd, fname3_mask, mask_bwd[0])
+            concat_img(image2[0], flo_img_bwd, fname3_mask, mask_bwd[0])
             flo_cycle_img = viz(image1, flow_cycle, fname4)
             mask2 = ((flo_cycle_img[0] >= 245) & (flo_cycle_img[1] >= 245) & (flo_cycle_img[2] >= 245))
             # white_c = 255 * 3 - 50
             # mask2 = (flo_cycle_img[0].to(torch.int) + flo_cycle_img[1].to(torch.int) + flo_cycle_img[2].to(torch.int)) >= white_c
             mask2 = mask2.unsqueeze(0)
-            flo_cycle_img_bwd = viz(image1, flow_cycle_bwd, fname5)
+            flo_cycle_img_bwd = viz(image2, flow_cycle_bwd, fname5)
             mask2_bwd = ((flo_cycle_img_bwd[0] >= 245) & (flo_cycle_img_bwd[1] >= 245) & (flo_cycle_img_bwd[2] >= 245))
             mask2_bwd = mask2_bwd.unsqueeze(0)
             output = warp(image2, flow_up)
-            output_bwd = warp(image2, flow_up_bwd)
+            output_bwd = warp(image1, flow_up_bwd)
             # mask_flow_all(image1, image2, flow_up, mask, out_root, f"{imbase1}_{imbase2}_warp2")
             # mask_flow_all(image2, image1, flow_up_bwd, mask_bwd, out_root, f"{imbase1}_{imbase2}_warp2_bwd")
             # output2 = warp(image2, flow_fwd_mask)
             # output3 = warp(image2, flow_fwd_mask, mask)
             output3 = warp(image2, flow_up, mask)
             output4 = warp(image2, flow_up, mask2)
-            output3_bwd = warp(image2, flow_up_bwd, mask_bwd)
-            output4_bwd = warp(image2, flow_up_bwd, mask2_bwd)
+            output3_bwd = warp(image1, flow_up_bwd, mask_bwd)
+            output4_bwd = warp(image1, flow_up_bwd, mask2_bwd)
             concat_img(image1[0], output[0], fname)
-            concat_img(image1[0], output_bwd[0], fname_bwd)
+            concat_img(image2[0], output_bwd[0], fname_bwd)
             # concat_img(image1[0], output2[0], fname_warp2)
             concat_img(image1[0], output3[0], fname_warp3)
             concat_img(image1[0], output4[0], fname_warp4)
-            concat_img(image1[0], output3_bwd[0], fname_warp3_bwd)
-            concat_img(image1[0], output4_bwd[0], fname_warp4_bwd)
+            concat_img(image2[0], output3_bwd[0], fname_warp3_bwd)
+            concat_img(image2[0], output4_bwd[0], fname_warp4_bwd)
             # rank = 0
             # print(f"rank: {rank} orig_im1: {image1.dtype} orig_im2: {image2.dtype}")
             # print(f"rank: {rank} orig_im1: {image1.shape}", image1.tolist())
