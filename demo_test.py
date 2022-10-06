@@ -30,6 +30,11 @@ def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5,
         flow_fwd_norm = normalize_flow(flow_fwd)
         flow_bwd_norm = normalize_flow(flow_bwd)
 
+    # print(f"flow_fwd: {flow_fwd.shape}", flow_fwd.tolist())
+    # print(f"flow_bwd: {flow_bwd.shape}", flow_bwd.tolist())
+    # print(f"flow_fwd_norm: {flow_fwd_norm.shape}", flow_fwd_norm.tolist())
+    # print(f"flow_bwd_norm: {flow_bwd_norm.shape}", flow_bwd_norm.tolist())
+
     nb, _, ht, wd = flow_fwd.shape
     coords0 = torch.meshgrid(torch.arange(ht), torch.arange(wd))
     coords0 = torch.stack(coords0[::-1], dim=0).float().repeat(nb, 1, 1, 1)
@@ -44,6 +49,12 @@ def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5,
 
     mask = (torch.abs(coords1_norm[:, 0]) < 1) & (torch.abs(coords1_norm[:, 1]) < 1)
 
+    # print(f"coords0: {coords0.shape}", coords0.tolist())
+    # print(f"coords1: {coords1.shape}", coords1.tolist())
+    # print(f"coords0_norm: {coords0_norm.shape}", coords0_norm.tolist())
+    # print(f"coords1_norm: {coords1_norm.shape}", coords1_norm.tolist())
+    # print(f"mask: {mask.shape}", mask.tolist())
+
     if is_cycle_norm:
         flow_bwd_interpolate_norm = grid_sample_flow(flow_bwd_norm, coords1_norm)
         flow_cycle_norm = flow_fwd_norm + flow_bwd_interpolate_norm
@@ -55,12 +66,16 @@ def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5,
         flow_cycle_norm = normalize_flow(flow_cycle)
         flow_bwd_interpolate_norm = normalize_flow(flow_bwd_interpolate)
 
+    # print(f"flow_bwd_interpolate: {flow_bwd_interpolate.shape}", flow_bwd_interpolate.tolist())
+    # print(f"flow_cycle: {flow_cycle.shape}", flow_cycle.tolist())
+    # print(f"flow_bwd_interpolate_norm: {flow_bwd_interpolate_norm.shape}", flow_bwd_interpolate_norm.tolist())
+    # print(f"flow_cycle_norm: {flow_cycle_norm.shape}", flow_cycle_norm.tolist())
+
     if is_mask_norm:
         flow_cycle_tmp = flow_cycle_norm.clone()
         flow_fwd_tmp = flow_fwd_norm.clone()
         flow_bwd_interpolate_tmp = flow_bwd_interpolate_norm.clone()
-        h, w = flow_fwd.shape[-2:]
-        h, w = torch.tensor(h), torch.tensor(w)
+        h, w = torch.tensor(ht), torch.tensor(wd)
         if is_alpha2_scale:
             alpha_2 = alpha_2 / (torch.sqrt(h**2 + w**2).item())
     else:
@@ -68,21 +83,100 @@ def forward_backward_consistency(flow_fwd, flow_bwd, alpha_1=0.01, alpha_2=0.5,
         flow_fwd_tmp = flow_fwd.clone()
         flow_bwd_interpolate_tmp = flow_bwd_interpolate.clone()
 
+    # print(f"flow_cycle_tmp: {flow_cycle_tmp.shape}", flow_cycle_tmp.tolist())
+    # print(f"flow_fwd_tmp: {flow_fwd_tmp.shape}", flow_fwd_tmp.tolist())
+    # print(f"flow_bwd_interpolate_tmp: {flow_bwd_interpolate_tmp.shape}", flow_bwd_interpolate_tmp.tolist())
+
     flow_cycle_abs_norm = (flow_cycle_tmp**2).sum(1)
     eps = alpha_1 * ((flow_fwd_tmp**2).sum(1) + (flow_bwd_interpolate_tmp**2).sum(1)) + alpha_2
     mask = mask & ((flow_cycle_abs_norm - eps) <= 0)
+
+    # print(f"flow_cycle_abs_norm: {flow_cycle_abs_norm.shape}", flow_cycle_abs_norm.tolist())
+    # print(f"eps: {eps.shape}", eps.tolist())
+    # print(f"mask2: {mask.shape}", mask.tolist())
 
     # mask = mask & ((flow_cycle[:, 0] <= 0) & (flow_cycle[:, 0] <= 0))
     # return coords0, coords1, mask
 
     # mask_rev = torch.logical_not(mask)
+    # mask_rev = mask.clone()
+    # flow_fwd_mask = flow_fwd.clone()
+    # flow_fwd_mask[:, 0][mask_rev] = float(wd)
+    # flow_fwd_mask[:, 1][mask_rev] = float(ht)
+    # flow_fwd_mask_norm = normalize_flow(flow_fwd_mask)
+    # flow_fwd_mask_norm = flow_fwd_norm.clone()
+    # flow_fwd_mask[:, 0][mask_rev] = 1.0
+    # flow_fwd_mask[:, 1][mask_rev] = 1.0
+    # flow_fwd_mask = flow_fwd_mask.permute(0, 2, 3, 1)
+    # flow_fwd_mask[mask_rev] = 1.0
+    # flow_fwd_mask = flow_fwd_mask.permute(0, 3, 1, 2)
+    # flow_fwd_mask_norm = normalize_flow(flow_fwd_mask)
+
+    # print(f"flow_fwd_mask: {flow_fwd_mask.shape}", flow_fwd_mask.tolist())
+    # print(f"mask_rev: {mask_rev.shape}", mask_rev.tolist())
+    # print(f"flow_fwd_mask_norm: {flow_fwd_mask_norm.shape}", flow_fwd_mask_norm.tolist())
+
+    # return flow_cycle, mask, [flow_fwd_mask, flow_fwd_mask_norm]
+    return flow_cycle, mask, []
+
+
+@torch.no_grad()
+def mask_flow_all(im1, im2, flow, mask, out_root="./", name=""):
+    flow_norm = normalize_flow(flow)
+    is_cond = ["is_use_norm", "is_mask_norm_use_norm", "is_pad_norm", "rev_mask"]
+    len_cond = len(is_cond)
+    num = 1 << len_cond
+
+    for i in range(num):
+        args = [bool(int(b)) for b in f"{i:b}".zfill(len_cond)]
+        flow_tmp = flow_norm.clone() if args[0] else flow.clone()
+        out_masks = mask_flow(flow_tmp, mask, *args)
+        flow_mask, flow_mask_norm, flow_mask_norm_denorm = out_masks
+        fname = name + "_mask"
+        for j, b in enumerate(args):
+            fname = fname + "_" + is_cond[j] if b else fname
+        out_name = os.path.join(out_root, f"{fname}.png")
+        out_name_norm = os.path.join(out_root, f"{fname}_norm.png")
+        out_name_norm_denorm = os.path.join(out_root, f"{fname}_norm_denorm.png")
+        im_flow_mask = warp(im2, flow_mask)
+        im_flow_mask_norm = warp(im2, flow_mask_norm)
+        im_flow_mask_norm_denorm = warp(im2, flow_mask_norm_denorm)
+        concat_img(im1[0], im_flow_mask[0], out_name)
+        concat_img(im1[0], im_flow_mask_norm[0], out_name_norm)
+        concat_img(im1[0], im_flow_mask_norm_denorm[0], out_name_norm_denorm)
+
+
+@torch.no_grad()
+def mask_flow(flow, mask, is_use_norm=False, is_mask_norm_use_norm=False,
+              is_pad_norm=False, rev_mask=False):
+    _, _, ht, wd = flow.shape
     mask_rev = mask.clone()
-    flow_fwd_mask = flow_fwd.clone()
-    flow_fwd_mask = flow_fwd_mask.permute(0, 2, 3, 1)
-    flow_fwd_mask[mask_rev] = 1.0
-    flow_fwd_mask = flow_fwd_mask.permute(0, 3, 1, 2)
-    flow_fwd_mask_norm = normalize_flow(flow_fwd_mask)
-    return flow_cycle, mask, [flow_fwd_mask, flow_fwd_mask_norm]
+    if rev_mask:
+        mask_rev = torch.logical_not(mask)
+    if is_use_norm:
+        flow_norm = flow.clone()
+        flow = denormalize_flow(flow_norm)
+    else:
+        flow_norm = normalize_flow(flow)
+
+    flow_mask = flow.clone()
+    pad_w, pad_h = 1.0, 1.0
+    if not is_pad_norm:
+        pad_w, pad_h = float(wd), float(ht)
+
+    flow_mask[:, 0][mask_rev] = pad_w
+    flow_mask[:, 1][mask_rev] = pad_h
+
+    if is_mask_norm_use_norm:
+        flow_mask_norm = flow_norm.clone()
+        flow_mask_norm[:, 0][mask_rev] = pad_w
+        flow_mask_norm[:, 1][mask_rev] = pad_h
+    else:
+        flow_mask_norm = normalize_flow(flow_mask)
+
+    flow_mask_norm_denorm = denormalize_flow(flow_mask_norm)
+
+    return flow_mask, flow_mask_norm, flow_mask_norm_denorm
 
 
 @torch.no_grad()
@@ -148,7 +242,12 @@ def viz(img, flo, fname=""):
     return torch.from_numpy(flo).permute(2, 0, 1)
 
 
-def concat_img(im1, im2, fname=""):
+def concat_img(im1, im2, fname="", mask=None):
+    if mask is not None:
+        mask_rev = torch.logical_not(mask)
+        im2 = im2.permute(1, 2, 0)
+        im2[mask_rev] = 0
+        im2 = im2.permute(2, 0, 1)
     img1 = im1.permute(1, 2, 0).cpu().numpy()
     img2 = im2.permute(1, 2, 0).cpu().numpy()
     img_cat = np.concatenate([img1, img2], axis=0)
@@ -157,7 +256,7 @@ def concat_img(im1, im2, fname=""):
 
     return img_cat
 
-
+# https://github.com/princeton-vl/RAFT/issues/64#issuecomment-748897559
 def warp(x, flo, mask=None):
     """
     warp an image/tensor (im2) back to im1, according to the optical flow
@@ -205,26 +304,35 @@ def prepare_out(args):
     is_mask_norm = not args.is_not_mask_norm
     is_alpha2_scale = args.is_alpha2_scale
     out_path = os.path.join(out_root, f"alpha1_{alpha1}_alpha2_{alpha2}")
-    if is_norm:
-        out_path = os.path.join(out_path, "calc_norm_flow")
+
+    def get_norms_out_name(out):
+        if is_norm:
+            out = os.path.join(out, "calc_norm_flow")
+        else:
+            out = os.path.join(out, "not_calc_norm_flow")
+        if is_coord_norm:
+            out = os.path.join(out, "is_coord_norm")
+        else:
+            out = os.path.join(out, "is_not_coord_norm")
+        if is_cycle_norm:
+            out = os.path.join(out, "is_cycle_norm")
+        else:
+            out = os.path.join(out, "is_not_cycle_norm")
+        if is_mask_norm:
+            out = os.path.join(out, "is_mask_norm")
+        else:
+            out = os.path.join(out, "is_not_mask_norm")
+        if is_alpha2_scale:
+            out = os.path.join(out, "is_alpha2_scale")
+        else:
+            out = os.path.join(out, "is_not_alpha2_scale")
+        return out
+
+    if args.all_norm:
+        out_path = os.path.join(out_path, "all_norm_comb")
     else:
-        out_path = os.path.join(out_path, "not_calc_norm_flow")
-    if is_cycle_norm:
-        out_path = os.path.join(out_path, "is_cycle_norm")
-    else:
-        out_path = os.path.join(out_path, "is_not_cycle_norm")
-    if is_coord_norm:
-        out_path = os.path.join(out_path, "is_coord_norm")
-    else:
-        out_path = os.path.join(out_path, "is_not_coord_norm")
-    if is_mask_norm:
-        out_path = os.path.join(out_path, "is_mask_norm")
-    else:
-        out_path = os.path.join(out_path, "is_not_mask_norm")
-    if is_alpha2_scale:
-        out_path = os.path.join(out_path, "is_alpha2_scale")
-    else:
-        out_path = os.path.join(out_path, "is_not_alpha2_scale")
+        out_path = get_norms_out_name(out_path)
+
     base_name = os.path.basename(args.path)
     dt_str = args.date_str
     out_path = os.path.join(out_path, base_name, dt_str)
@@ -247,37 +355,55 @@ def demo(args):
     is_coord_norm = not args.is_not_coord_norm
     is_mask_norm = not args.is_not_mask_norm
     is_alpha2_scale = args.is_alpha2_scale
+    is_kitti = args.is_kitti
+    mode = 'sintel'
+    # mode = 'kitti' if is_kitti else 'sintel'
 
     with torch.no_grad():
         images = glob.glob(os.path.join(args.path, '*.png')) + \
                  glob.glob(os.path.join(args.path, '*.jpg'))
 
         images = sorted(images)
-        print(f"len_img: {len(images)}")
+        len_img = len(images)
+        print(f"len_img: {len_img}")
         # images = [images[0], images[-1]]
-        for imfile1, imfile2 in zip(images[:-1], images[1:]):
+        for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
+            if is_kitti and i % 2 == 1:
+                continue
             imbase1 = os.path.basename(imfile1)
             imbase2 = os.path.basename(imfile2)
             fname = f"{imbase1}_{imbase2}_warp.png"
+            fname_bwd = f"{imbase1}_{imbase2}_warp_bwd.png"
             fname_warp2 = f"{imbase1}_{imbase2}_warp2.png"
+            fname_warp2_bwd = f"{imbase1}_{imbase2}_warp2_bwd.png"
             fname_warp3 = f"{imbase1}_{imbase2}_warp3.png"
+            fname_warp3_bwd = f"{imbase1}_{imbase2}_warp3_bwd.png"
             fname_warp4 = f"{imbase1}_{imbase2}_warp4.png"
+            fname_warp4_bwd = f"{imbase1}_{imbase2}_warp4_bwd.png"
             fname2 = f"{imbase1}_{imbase2}_flo.png"
+            fname2_mask = f"{imbase1}_{imbase2}_flo_mask.png"
             fname3 = f"{imbase1}_{imbase2}_flo_bwd.png"
+            fname3_mask = f"{imbase1}_{imbase2}_flo_bwd_mask.png"
             fname4 = f"{imbase1}_{imbase2}_flo_cycle.png"
             fname5 = f"{imbase1}_{imbase2}_flo_cycle_bwd.png"
             fname = os.path.join(out_root, fname)
+            fname_bwd = os.path.join(out_root, fname_bwd)
             fname_warp2 = os.path.join(out_root, fname_warp2)
+            fname_warp2_bwd = os.path.join(out_root, fname_warp2_bwd)
             fname_warp3 = os.path.join(out_root, fname_warp3)
+            fname_warp3_bwd = os.path.join(out_root, fname_warp3_bwd)
             fname_warp4 = os.path.join(out_root, fname_warp4)
+            fname_warp4_bwd = os.path.join(out_root, fname_warp4_bwd)
             fname2 = os.path.join(out_root, fname2)
+            fname2_mask = os.path.join(out_root, fname2_mask)
             fname3 = os.path.join(out_root, fname3)
+            fname3_mask = os.path.join(out_root, fname3_mask)
             fname4 = os.path.join(out_root, fname4)
             fname5 = os.path.join(out_root, fname5)
             image1 = load_image(imfile1)
             image2 = load_image(imfile2)
 
-            padder = InputPadder(image1.shape)
+            padder = InputPadder(image1.shape, mode=mode)
             image1, image2 = padder.pad(image1, image2)
 
             # flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
@@ -288,6 +414,15 @@ def demo(args):
                 flow_up_bwd_norm = normalize_flow(flow_up_bwd)
                 flow_up_tmp = flow_up_norm.clone()
                 flow_up_bwd_tmp = flow_up_bwd_norm.clone()
+                flow_up_norm_denorm = denormalize_flow(flow_up_norm)
+                # flow_up_norm_denorm_rev = denormalize_flow(flow_up_norm, True)
+                # print("flow_up:", flow_up.tolist())
+                # print("flow_up_norm_denorm:", flow_up_norm_denorm.tolist())
+                # print("flow_up_norm_denorm_rev:", flow_up_norm_denorm_rev.tolist())
+                # print("flow_up sum:", flow_up.sum())
+                # print("flow_up_norm_denorm sum:", flow_up_norm_denorm.sum())
+                # print("flow_up_norm_denorm_rev sum:", flow_up_norm_denorm_rev.sum())
+                # print((flow_up == flow_up_norm_denorm).tolist())
             else:
                 flow_up_tmp = flow_up.clone()
                 flow_up_bwd_tmp = flow_up_bwd.clone()
@@ -301,25 +436,37 @@ def demo(args):
                                                                                    is_coord_norm=is_coord_norm,
                                                                                    is_mask_norm=is_mask_norm,
                                                                                    is_alpha2_scale=is_alpha2_scale)
-            flow_fwd_mask, flow_fwd_mask_norm = flow_fwd_mask
-            flow_bwd_mask, flow_bwd_mask_norm = flow_bwd_mask
-            viz(image1, flow_up, fname2)
-            viz(image1, flow_up_bwd, fname3)
+            # flow_fwd_mask, flow_fwd_mask_norm = flow_fwd_mask
+            # flow_bwd_mask, flow_bwd_mask_norm = flow_bwd_mask
+            flo_img = viz(image1, flow_up, fname2)
+            flo_img_bwd = viz(image1, flow_up_bwd, fname3)
+            concat_img(image1[0], flo_img, fname2_mask, mask[0])
+            concat_img(image1[0], flo_img_bwd, fname3_mask, mask_bwd[0])
             flo_cycle_img = viz(image1, flow_cycle, fname4)
             mask2 = ((flo_cycle_img[0] >= 245) & (flo_cycle_img[1] >= 245) & (flo_cycle_img[2] >= 245))
             # white_c = 255 * 3 - 50
             # mask2 = (flo_cycle_img[0].to(torch.int) + flo_cycle_img[1].to(torch.int) + flo_cycle_img[2].to(torch.int)) >= white_c
             mask2 = mask2.unsqueeze(0)
-            viz(image1, flow_cycle_bwd, fname5)
+            flo_cycle_img_bwd = viz(image1, flow_cycle_bwd, fname5)
+            mask2_bwd = ((flo_cycle_img_bwd[0] >= 245) & (flo_cycle_img_bwd[1] >= 245) & (flo_cycle_img_bwd[2] >= 245))
+            mask2_bwd = mask2_bwd.unsqueeze(0)
             output = warp(image2, flow_up)
-            output2 = warp(image2, flow_fwd_mask)
+            output_bwd = warp(image2, flow_up_bwd)
+            # mask_flow_all(image1, image2, flow_up, mask, out_root, f"{imbase1}_{imbase2}_warp2")
+            # mask_flow_all(image2, image1, flow_up_bwd, mask_bwd, out_root, f"{imbase1}_{imbase2}_warp2_bwd")
+            # output2 = warp(image2, flow_fwd_mask)
             # output3 = warp(image2, flow_fwd_mask, mask)
             output3 = warp(image2, flow_up, mask)
             output4 = warp(image2, flow_up, mask2)
+            output3_bwd = warp(image2, flow_up_bwd, mask_bwd)
+            output4_bwd = warp(image2, flow_up_bwd, mask2_bwd)
             concat_img(image1[0], output[0], fname)
-            concat_img(image1[0], output2[0], fname_warp2)
+            concat_img(image1[0], output_bwd[0], fname_bwd)
+            # concat_img(image1[0], output2[0], fname_warp2)
             concat_img(image1[0], output3[0], fname_warp3)
             concat_img(image1[0], output4[0], fname_warp4)
+            concat_img(image1[0], output3_bwd[0], fname_warp3_bwd)
+            concat_img(image1[0], output4_bwd[0], fname_warp4_bwd)
             # rank = 0
             # print(f"rank: {rank} orig_im1: {image1.dtype} orig_im2: {image2.dtype}")
             # print(f"rank: {rank} orig_im1: {image1.shape}", image1.tolist())
@@ -349,6 +496,8 @@ if __name__ == '__main__':
     parser.add_argument('--is_not_coord_norm', action='store_true')
     parser.add_argument('--is_not_mask_norm', action='store_true')
     parser.add_argument('--is_alpha2_scale', action='store_true')
+    parser.add_argument('--all_norm', action='store_true')
+    parser.add_argument('--is_kitti', action='store_true')
     parser.add_argument('--date_str', default=dt_str)
     args = parser.parse_args()
 
