@@ -223,7 +223,7 @@ def demo(args):
     data_root = args.path
 
     # output data path
-    out_root = args.out_path
+    out_root = args.out_root
     data_name = args.data_name
     if out_root is None or out_root == "":
         out_root = os.path.dirname(args.path)
@@ -231,6 +231,7 @@ def demo(args):
         data_name = "flow"
     save_type = args.save_type[1:]
     out_root = os.path.join(out_root, data_name, save_type)
+    args.out_path = out_root
 
     # use subset
     subset = args.subset
@@ -286,7 +287,7 @@ if __name__ == '__main__':
     parser.add_argument('--alternate_corr',
                         action='store_true',
                         help='use efficent correlation implementation')
-    parser.add_argument('--out_path', type=str, default=None, help="out path")
+    parser.add_argument('--out_root', type=str, default=None, help="out root path")
     parser.add_argument('--data_name', type=str, default="flow")
     parser.add_argument('--save_type', type=str, default=".pth",
                         choices=[".pth", ".flo", ".png", ".jpg"])
