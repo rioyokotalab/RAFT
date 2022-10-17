@@ -232,6 +232,7 @@ def demo(args):
     save_type = args.save_type[1:]
     out_root = os.path.join(out_root, data_name, save_type)
     args.out_path = out_root
+    os.makedirs(out_root, exist_ok=True)
 
     # use subset
     subset = args.subset
