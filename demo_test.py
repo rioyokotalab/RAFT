@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+import time
 
 from core.raft import RAFT
 from core.utils import flow_viz
@@ -16,23 +17,38 @@ DEVICE = 'cuda'
 
 
 @torch.no_grad()
-def calc_optical_flow(imgs, flow_model, is_norm=False, up=False, verbose=False):
+def calc_optical_flow(imgs, flow_model, is_norm=False, up=False, verbose=False, is_speed=False):
     num_img = len(imgs)
     if verbose:
         orig_im1, orig_im2 = imgs[0].clone(), imgs[-1].clone()
     i = 1 if up else 0
     flow_model.eval()
-    flow_fwds = torch.stack([
-        flow_model(img0, img1, upsample=False, test_mode=True)[i]
-        for img0, img1 in zip(imgs[:-1], imgs[1:])
-    ])
-    flow_bwds = torch.stack([
-        flow_model(img0, img1, upsample=False, test_mode=True)[i]
-        for img0, img1 in zip(imgs[1:][::-1], imgs[:-1][::-1])
-    ])
+    if is_speed:
+        nb, _, h, w = imgs[0].shape
+        img0_list = torch.cat([t.clone() for t in imgs[:-1]])
+        img1_list = torch.cat([t.clone() for t in imgs[1:]])
+        flow_num = img0_list.shape[0] // nb
+        print("img0_list", img0_list.shape)
+        flow_fwds = flow_model(img0_list, img1_list, upsample=False, test_mode=True)[i]
+        flow_fwds = flow_fwds.reshape(flow_num, nb, -1, h, w)
+        print("flow_fwds", flow_fwds.shape)
+        img0_bwd_list = torch.cat([t.clone() for t in imgs[1:][::-1]])
+        img1_bwd_list = torch.cat([t.clone() for t in imgs[:-1][::-1]])
+        flow_bwds = flow_model(img0_bwd_list, img1_bwd_list, upsample=False, test_mode=True)[i]
+        flow_bwds = flow_bwds.reshape(flow_num, nb, -1, h, w)
+    else:
+        flow_fwds = torch.stack([
+            flow_model(img0, img1, upsample=False, test_mode=True)[i]
+            for img0, img1 in zip(imgs[:-1], imgs[1:])
+        ])
+        flow_bwds = torch.stack([
+            flow_model(img0, img1, upsample=False, test_mode=True)[i]
+            for img0, img1 in zip(imgs[1:][::-1], imgs[:-1][::-1])
+        ])
     flow_fwd = flow_fwds[0].cuda()
     flow_bwd = flow_bwds[0].cuda()
     if num_img > 2:
+        print("in calc of, num_img", num_img)
         flow_fwds = flow_fwds.cuda()
         flow_bwds = flow_bwds.cuda()
         flow_fwd = concat_flow(flow_fwds, is_norm)
@@ -242,6 +258,23 @@ def concat_flow(flows, is_norm=False):
     return out_flow
 
 
+def calc_error(flow_cycle_src, mask=None, is_norm=False):
+    flow_cycle = flow_cycle_src.clone()
+    # ratio = 0
+    ratio = 0.5
+    if is_norm:
+        flow_cycle = denormalize_flow(flow_cycle)
+    flow_cycle_abs = torch.abs(flow_cycle)
+    error_flow = (flow_cycle_abs <= ratio).sum()
+    # error_flow = flow_cycle_abs.sum()
+    error_flow_mask = None
+    if mask is not None:
+        flow_cycle_abs_tmp = flow_cycle_abs.permute(0, 2, 3, 1)
+        error_flow_mask = (flow_cycle_abs_tmp[mask] <= ratio).sum()
+        # error_flow_mask = flow_cycle_abs_tmp[mask].sum()
+    return error_flow, error_flow_mask
+
+
 @torch.no_grad()
 def normalize_coord(coords):
     _, _, ht, wd = coords.shape
@@ -426,18 +459,24 @@ def demo(args):
     mode = 'sintel'
     n_frames = args.n_frames
     # mode = 'kitti' if is_kitti else 'sintel'
+    nb = args.nb
 
     with torch.no_grad():
         images = glob.glob(os.path.join(args.path, '*.png')) + \
                  glob.glob(os.path.join(args.path, '*.jpg'))
 
         images = sorted(images)
+        # images = [images[0], images[-1]]
         len_img = len(images)
         print(f"len_img: {len_img}")
-        # images = [images[0], images[-1]]
         # for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
+        #     imfiles = [imfile1, imfile2]
         for i in range(len_img - n_frames + 1):
             imfiles = images[i:i+n_frames]
+            if nb > 1:
+                if i + nb - 1 + n_frames >= len_img:
+                    break
+                imfiles_list = [images[i+j:i+j+n_frames] for j in range(1, nb)]
             if is_kitti and i % 2 == 1:
                 continue
             imfile1, imfile2 = imfiles[0], imfiles[-1]
@@ -475,9 +514,12 @@ def demo(args):
             # image2 = load_image(imfile2)
             l_images = load_images(imfiles)
             image1, image2 = l_images[0], l_images[-1]
-
             padder = InputPadder(image1.shape, mode=mode)
             l_images = padder.pad(*l_images)
+
+            if nb > 1:
+                l_images_list = [load_images(l_imfiles) for l_imfiles in imfiles_list]
+                l_images_list = [padder.pad(*l_l_images) for l_l_images in l_images_list]
 
             # flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
             # flow_low, flow_up = model(image1, image2, test_mode=True)
@@ -499,7 +541,9 @@ def demo(args):
             # else:
             #     flow_up_tmp = flow_up.clone()
             #     flow_up_bwd_tmp = flow_up_bwd.clone()
+            s1_time = time.perf_counter()
             flow_up, flow_up_bwd = calc_optical_flow(l_images, model, is_norm=is_norm, up=True)
+            m_time = time.perf_counter()
             if is_norm:
                 flow_up_norm = flow_up.clone()
                 flow_up_bwd_norm = flow_up_bwd.clone()
@@ -510,6 +554,7 @@ def demo(args):
             else:
                 flow_up_tmp = flow_up.clone()
                 flow_up_bwd_tmp = flow_up_bwd.clone()
+            s2_time = time.perf_counter()
             flow_cycle, mask, flow_fwd_mask = forward_backward_consistency(flow_up_tmp, flow_up_bwd_tmp, alpha1, alpha2,
                                                                            is_norm=is_norm, is_cycle_norm=is_cycle_norm,
                                                                            is_coord_norm=is_coord_norm,
@@ -520,8 +565,105 @@ def demo(args):
                                                                                    is_coord_norm=is_coord_norm,
                                                                                    is_mask_norm=is_mask_norm,
                                                                                    is_alpha2_scale=is_alpha2_scale)
+            m2_time = time.perf_counter()
+            print("calc optical flow time (s):", m_time - s1_time)
+            print("mask calc time (s):", m2_time - s2_time)
+            print("total calc optical flow time (s):", m2_time - s1_time)
+            print(flow_cycle.shape, flow_up.shape)
+            if nb > 1:
+                l_images_batches_tmp = [l_images]
+                for l_img in l_images_list:
+                    l_images_batches_tmp.append(l_img)
+                print(len(l_images_batches_tmp), len(l_images_batches_tmp[0]), len(l_images_batches_tmp[1]))
+                l_images_batches = []
+                for i in range(n_frames):
+                    l_tmp_list = []
+                    for l_img_list in l_images_batches_tmp:
+                        l_imgs = l_img_list[i]
+                        l_tmp_list.append(l_imgs)
+                    tmp_img = torch.cat(l_tmp_list)
+                    l_images_batches.append(tmp_img)
+                print(len(l_images_batches), l_images_batches[0].shape)
+                s1_time = time.perf_counter()
+                flow_up_batches, flow_up_bwd_batches = calc_optical_flow(l_images_batches, model, is_norm=is_norm, up=True)
+                m_time = time.perf_counter()
+                if nb > 2:
+                    s1_m_time = time.perf_counter()
+                    flow_up_batches_list, flow_bwd_batches_list = [], []
+                    for i in range(0, nb, 2):
+                        l_l_images_batches = [im[i:i+2] for im in l_images_batches]
+                        flow_up_batches_1, flow_up_bwd_batches_1 = calc_optical_flow(l_l_images_batches, model, is_norm=is_norm, up=True)
+                        flow_up_batches_list.append(flow_up_batches_1)
+                        flow_bwd_batches_list.append(flow_up_bwd_batches_1)
+                    flow_up_batches_list = torch.cat(flow_up_batches_list)
+                    flow_bwd_batches_list = torch.cat(flow_bwd_batches_list)
+                    m_m_time = time.perf_counter()
+                if is_norm:
+                    flow_up_norm_batches = flow_up_batches.clone()
+                    flow_up_bwd_norm_batches = flow_up_bwd_batches.clone()
+                    flow_up_batches = denormalize_flow(flow_up_batches)
+                    flow_up_bwd_batches = denormalize_flow(flow_up_bwd_batches)
+                    flow_up_batches_tmp = flow_up_norm_batches.clone()
+                    flow_up_bwd_batches_tmp = flow_up_bwd_norm_batches.clone()
+                else:
+                    flow_up_batches_tmp = flow_up_batches.clone()
+                    flow_up_bwd_batches_tmp = flow_up_bwd_batches.clone()
+                s2_time = time.perf_counter()
+                flow_cycle_batches, mask_batches, flow_fwd_mask_batches = forward_backward_consistency(flow_up_batches_tmp, flow_up_bwd_batches_tmp, alpha1, alpha2,
+                                                                                                is_norm=is_norm, is_cycle_norm=is_cycle_norm,
+                                                                                                is_coord_norm=is_coord_norm,
+                                                                                                is_mask_norm=is_mask_norm,
+                                                                                                is_alpha2_scale=is_alpha2_scale)
+                flow_cycle_bwd_batches, mask_bwd_batches, flow_bwd_mask_spedd = forward_backward_consistency(flow_up_bwd_batches_tmp, flow_up_batches_tmp, alpha1, alpha2,
+                                                                                                        is_norm=is_norm, is_cycle_norm=is_cycle_norm,
+                                                                                                        is_coord_norm=is_coord_norm,
+                                                                                                        is_mask_norm=is_mask_norm,
+                                                                                                        is_alpha2_scale=is_alpha2_scale)
+                m2_time = time.perf_counter()
+                print("batches calc optical flow time (s):", m_time - s1_time)
+                if nb > 2:
+                    print("batches nb cat calc optical flow time (s):", m_m_time - s1_m_time)
+                    print(torch.min((flow_up_batches_list == flow_up_batches)), (flow_up_batches_list == flow_up_batches).float().mean())
+                print("batches mask calc time (s):", m2_time - s2_time)
+                print("batches total calc optical flow time (s):", m2_time - s1_time)
+                print(flow_cycle_batches.shape, flow_up_batches.shape)
             # flow_fwd_mask, flow_fwd_mask_norm = flow_fwd_mask
             # flow_bwd_mask, flow_bwd_mask_norm = flow_bwd_mask
+            # s1_time = time.perf_counter()
+            # flow_up_batches, flow_up_bwd_speed = calc_optical_flow(l_images, model, is_norm=is_norm, up=True, is_speed=True)
+            # m_time = time.perf_counter()
+            # if is_norm:
+            #     flow_up_norm_speed = flow_up_speed.clone()
+            #     flow_up_bwd_norm_speed = flow_up_bwd_speed.clone()
+            #     flow_up_speed = denormalize_flow(flow_up_speed)
+            #     flow_up_bwd_speed = denormalize_flow(flow_up_bwd_speed)
+            #     flow_up_speed_tmp = flow_up_norm_speed.clone()
+            #     flow_up_bwd_speed_tmp = flow_up_bwd_norm_speed.clone()
+            # else:
+            #     flow_up_speed_tmp = flow_up_speed.clone()
+            #     flow_up_bwd_speed_tmp = flow_up_bwd_speed.clone()
+            # s2_time = time.perf_counter()
+            # flow_cycle_speed, mask_speed, flow_fwd_mask_speed = forward_backward_consistency(flow_up_speed_tmp, flow_up_bwd_speed_tmp, alpha1, alpha2,
+            #                                                                                  is_norm=is_norm, is_cycle_norm=is_cycle_norm,
+            #                                                                                  is_coord_norm=is_coord_norm,
+            #                                                                                  is_mask_norm=is_mask_norm,
+            #                                                                                  is_alpha2_scale=is_alpha2_scale)
+            # flow_cycle_bwd_speed, mask_bwd_speed, flow_bwd_mask_spedd = forward_backward_consistency(flow_up_bwd_speed_tmp, flow_up_speed_tmp, alpha1, alpha2,
+            #                                                                                          is_norm=is_norm, is_cycle_norm=is_cycle_norm,
+            #                                                                                          is_coord_norm=is_coord_norm,
+            #                                                                                          is_mask_norm=is_mask_norm,
+            #                                                                                          is_alpha2_scale=is_alpha2_scale)
+            # m2_time = time.perf_counter()
+            # print("speed calc optical flow time (s):", m_time - s1_time)
+            # print("speed mask calc time (s):", m2_time - s2_time)
+            # print("speed total calc optical flow time (s):", m2_time - s1_time)
+            # print(torch.min((flow_up_speed == flow_up)), (flow_up_speed == flow_up).float().mean())
+            # flow_fwd_mask, flow_fwd_mask_norm = flow_fwd_mask
+            # flow_bwd_mask, flow_bwd_mask_norm = flow_bwd_mask
+            error_fwd, error_fwd_mask = calc_error(flow_cycle, mask)
+            error_bwd, error_bwd_mask = calc_error(flow_cycle_bwd, mask)
+            print("error fwd:", error_fwd, error_fwd_mask, error_fwd / error_fwd_mask)
+            print("error bwd:", error_bwd, error_bwd_mask, error_bwd / error_bwd_mask)
             flo_img = viz(image1, flow_up, fname2)
             flo_img_bwd = viz(image2, flow_up_bwd, fname3)
             concat_img(image1[0], flo_img, fname2_mask, mask[0])
@@ -584,6 +726,7 @@ if __name__ == '__main__':
     parser.add_argument('--all_norm', action='store_true')
     parser.add_argument('--is_kitti', action='store_true')
     parser.add_argument('--date_str', default=dt_str)
+    parser.add_argument('--nb', type=int, default=1, help="batch size")
     args = parser.parse_args()
 
     demo(args)
