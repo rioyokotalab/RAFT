@@ -124,7 +124,8 @@ def adjust_dim(tar, out_dim, return_none=True):
 def save_flow(flo, fname):
     base_name = os.path.basename(fname)
     ext = os.path.splitext(base_name)[-1]
-    flo_np = flo.permute(1, 2, 0).cpu().numpy()
+    if ext in [".flo", ".png", ".jpg"]:
+        flo_np = flo.permute(1, 2, 0).cpu().numpy()
     if ext == ".pth":
         torch.save(flo, fname)
     elif ext == ".flo":
@@ -137,7 +138,12 @@ def save_flow(flo, fname):
 
 def save_flows(flos, fnames):
     is_seperate = isinstance(fnames, (tuple, list))
-    base_name = os.path.basename(fnames[0])
+    is_str = isinstance(fnames, str)
+    assert is_seperate or is_str
+    if is_seperate:
+        base_name = os.path.basename(fnames[0])
+    else:
+        base_name = os.path.basename(fnames)
     ext = os.path.splitext(base_name)[-1]
     if is_seperate or ext == ".flo" or ext == ".png" or ext == ".jpg":
         for flo, fname in zip(flos, fnames):
@@ -147,11 +153,14 @@ def save_flows(flos, fnames):
             save_flow(l_flo, fname)
     elif ext == ".pth":
         save_flow(flos, fnames)
+    else:
+        raise NotImplementedError(f"{ext} and {fnames} is not supported!!")
 
 
 def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_path, args):
     up = args.up
     ext = args.save_type
+    is_split_file = args.split_file
     imbasefiles = [os.path.basename(imfile) for imfile in imfiles]
     l_images = load_images(imfiles)
     # image1 = l_images[0]
@@ -164,28 +173,40 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     l_m_time = time.perf_counter()
     l_exec_m_time = l_m_time - l_s_time
 
-    num, fnames_fwd, fnames_bwd = flow_fwd.shape[0], [], []
-    for i in range(num):
-        imbase = os.path.splitext(imbasefiles[i])[0]
-        filename = f"{imbase}{ext}"
-        fnames_fwd.append(os.path.join(out_fwd_path, filename))
-        fnames_bwd.append(os.path.join(out_bwd_path, filename))
+    num, nb, c, h, w = flow_fwd.shape
+    if is_split_file:
+        fnames_fwd, fnames_bwd = [], []
+        for i in range(num):
+            imbase = os.path.splitext(imbasefiles[i])[0]
+            filename = f"{imbase}{ext}"
+            fnames_fwd.append(os.path.join(out_fwd_path, filename))
+            fnames_bwd.append(os.path.join(out_bwd_path, filename))
+    else:
+        fnames_fwd = out_fwd_path.rstrip("/") + ext
+        fnames_bwd = out_bwd_path.rstrip("/") + ext
+        err_msg = "not supprted batch calc optical flow, "
+        err_msg += f"{flow_fwd.shape}, {video_name}"
+        assert nb == 1, err_msg
+        flow_fwd = flow_fwd.reshape(num, c, h, w)
+        flow_bwd = flow_bwd.reshape(num, c, h, w)
 
     save_flows(flow_fwd, fnames_fwd)
     save_flows(flow_bwd, fnames_bwd)
     l_e_time = time.perf_counter()
     l_exec_time = l_e_time - l_m_time
     print_rank(video_name, imbasefiles, "calc optical flow time (s):", l_exec_m_time, log_out_root=args.out_path)
-    print_rank(video_name, imbasefiles, "save optical flow time (s):", l_exec_time, log_out_root=args.out_path)
+    print_rank(video_name, "save optical flow time (s):", l_exec_time, log_out_root=args.out_path)
 
 
 @torch.no_grad()
 def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, args):
+    is_split_file = args.split_file
     path = os.path.join(data_root, video_name)
     out_fwd_path = os.path.join(out_root_fwd, video_name)
     out_bwd_path = os.path.join(out_root_bwd, video_name)
-    os.makedirs(out_fwd_path, exist_ok=True)
-    os.makedirs(out_bwd_path, exist_ok=True)
+    if is_split_file:
+        os.makedirs(out_fwd_path, exist_ok=True)
+        os.makedirs(out_bwd_path, exist_ok=True)
     images = glob.glob(os.path.join(path, '*.png')) + \
         glob.glob(os.path.join(path, '*.jpg'))
 
@@ -193,11 +214,13 @@ def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, arg
     len_img = len(images)
     print_rank(f"len_img: {len_img}", video_name, path, log_out_root=args.out_path)
     s_time = time.perf_counter()
-    for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
-        imfiles = [imfile1, imfile2]
+    if is_split_file:
+        for i, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
+            imfiles = [imfile1, imfile2]
+            save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_path, args)
+    else:
+        imfiles = images[:]
         save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_path, args)
-    # imfiles = images[:]
-    # save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_path, args)
     e_time = time.perf_counter()
     exec_time = e_time - s_time
     h_exec_time = change_second_to_humantime(exec_time)
@@ -207,6 +230,10 @@ def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, arg
 
 
 def demo(args):
+    # support all flow save type is only pth type
+    if not args.split_file:
+        assert args.save_type == ".pth"
+
     # setup gpu device
     local_rank = dist_setup()
     torch.cuda.set_device(local_rank)
@@ -231,8 +258,9 @@ def demo(args):
         data_name = "flow"
     save_type = args.save_type[1:]
     out_root = os.path.join(out_root, data_name, save_type)
-    args.out_path = out_root
     os.makedirs(out_root, exist_ok=True)
+    # setting for rank log dir
+    args.out_path = out_root
 
     # use subset
     subset = args.subset
@@ -252,6 +280,7 @@ def demo(args):
     if not os.path.isdir(data_root):
         raise FileNotFoundError(f"{data_root} is not exist dir!!")
 
+    # get video list
     video_names = [os.path.basename(data_root)]
     images = glob.glob(os.path.join(data_root, '*.png')) + \
         glob.glob(os.path.join(data_root, '*.jpg'))
@@ -259,10 +288,22 @@ def demo(args):
         video_names = sorted(os.listdir(data_root))
     else:
         data_root = os.path.dirname(data_root)
+
+    # adjust video num specified by args.start_idx, args.make_num
+    start_idx = args.start_idx
+    make_num = len(video_names) if args.make_num is None else args.make_num
+    end_idx = make_num + start_idx
+    video_names = video_names[start_idx:end_idx]
+
+    # setting for rank log dir
+    args.out_path = os.path.join(args.out_path, f"{start_idx}_{end_idx}")
+    os.makedirs(args.out_path, exist_ok=True)
+
+    # assign video list per gpu(process)
     num_video = len(video_names)
     s_idx, e_idx = split_range(num_video)
     gpu = dist.get_world_size()
-    print_rank("num video:", len(video_names), log_out_root=args.out_path)
+    print_rank("num video:", num_video, log_out_root=args.out_path)
     l_video_names = video_names[s_idx:e_idx]
     s_time = time.perf_counter()
     print_rank("process video num", len(l_video_names), "gpu:", gpu, log_out_root=args.out_path)
@@ -293,6 +334,10 @@ if __name__ == '__main__':
     parser.add_argument('--save_type', type=str, default=".pth",
                         choices=[".pth", ".flo", ".png", ".jpg"])
     parser.add_argument('--up', action='store_true', help='save flow up')
+    parser.add_argument('--start_idx', type=int, default=0)
+    parser.add_argument('--make_num', type=int, default=None)
+    parser.add_argument('--split_file', action='store_true',
+                        help='if True, save 1file/1flow, else 1file/all flow on video')
     args = parser.parse_args()
 
     demo(args)
