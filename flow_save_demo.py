@@ -306,9 +306,11 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     # debug print func
     def print_debug_list(flow, filename):
         assert isinstance(flow, torch.Tensor)
+        tmp_flow = flow.clone()
         with open(filename, "w") as f:
-            print(flow.shape, file=f)
-            tmp_list = flow.reshape(-1).tolist()
+            print(tmp_flow.shape, file=f)
+            tmp_list = tmp_flow.reshape(-1).tolist()
+            print(tmp_flow.reshape(-1).shape, len(tmp_list), file=f)
             for t in tmp_list:
                 print(t, file=f)
 
@@ -332,12 +334,14 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     read_flo_bwd = adjust_dim(read_flo_bwd, 4)
     for i in range(num):
         imbasefile = imbasefiles[i:i+2]
+        head_fwd_str = f"{i} fwd {imbasefile}"
+        head_bwd_str = f"{i} bwd {imbasefile}"
         if is_check_load_fwd:
-            fwd_basefile = flo_fwd_basefiles[i]
-            head_fwd_str = f"{i} {imbasefile} {fwd_basefile}"
+            fwd_basefile = [flo_fwd_basefiles[i]] if is_file_fwd else []
+            head_fwd_str += f" {fwd_basefile}"
         if is_check_load_bwd:
-            bwd_basefile = flo_bwd_basefiles[i]
-            head_bwd_str = f"{i} {imbasefile} {bwd_basefile}"
+            bwd_basefile = [flo_bwd_basefiles[i]] if is_file_bwd else []
+            head_bwd_str += f" {bwd_basefile}"
         # check upflow func
         print_rank(imbasefile, "check upflow func", log_out_root=args.out_path)
         flow_fwd_low_up = upflow8(flow_fwd_low[i])
@@ -346,10 +350,10 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
         check_flow_bwd_str = get_str_e(flow_bwd_low_up[0], flow_bwd_up[i][0])
         diff_flow_fwd_str = get_str_d(flow_fwd_low_up[0], flow_fwd_up[i][0])
         diff_flow_bwd_str = get_str_d(flow_bwd_low_up[0], flow_bwd_up[i][0])
-        print_rank(imbasefile, check_flow_fwd_str, log_out_root=args.out_path)
-        print_rank(imbasefile, check_flow_bwd_str, log_out_root=args.out_path)
-        print_rank(imbasefile, diff_flow_fwd_str, log_out_root=args.out_path)
-        print_rank(imbasefile, diff_flow_bwd_str, log_out_root=args.out_path)
+        print_rank(head_fwd_str, check_flow_fwd_str, log_out_root=args.out_path)
+        print_rank(head_bwd_str, check_flow_bwd_str, log_out_root=args.out_path)
+        print_rank(head_fwd_str, diff_flow_fwd_str, log_out_root=args.out_path)
+        print_rank(head_bwd_str, diff_flow_bwd_str, log_out_root=args.out_path)
         # print original flow up
         print_debug_list(flow_fwd_up[i][0], debug_orig_fwd[i])
         print_debug_list(flow_bwd_up[i][0], debug_orig_bwd[i])
@@ -387,7 +391,8 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
             print_debug_list(load_flow_bwd_low_up[0], debug_load_bwd[i])
         # read save flow check
         print_rank(imbasefile, "check save flow", log_out_root=args.out_path)
-        print_rank(imbasefile, read_flo_fwd[i].shape, flow_fwd_up[i][0].shape, log_out_root=args.out_path)
+        print_rank(head_fwd_str, read_flo_fwd[i].shape, flow_fwd_up[i][0].shape, log_out_root=args.out_path)
+        print_rank(head_bwd_str, read_flo_bwd[i].shape, flow_bwd_up[i][0].shape, log_out_root=args.out_path)
         if up:
             check_read_fwd_up_str = get_str_e(read_flo_fwd[i], flow_fwd_up[i][0])
             check_read_bwd_up_str = get_str_e(read_flo_bwd[i], flow_bwd_up[i][0])
@@ -404,14 +409,14 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
             diff_read_bwd_low_str = get_str_d(read_flo_bwd[i], flow_bwd_low[i][0])
             diff_read_fwd_up_str = get_str_d(read_flo_fwd_low_up[0], flow_fwd_up[i][0])
             diff_read_bwd_up_str = get_str_d(read_flo_bwd_low_up[0], flow_bwd_up[i][0])
-            print_rank(imbasefile, check_read_fwd_low_str, log_out_root=args.out_path)
-            print_rank(imbasefile, check_read_bwd_low_str, log_out_root=args.out_path)
-            print_rank(imbasefile, diff_read_fwd_low_str, log_out_root=args.out_path)
-            print_rank(imbasefile, diff_read_bwd_low_str, log_out_root=args.out_path)
-        print_rank(imbasefile, check_read_fwd_up_str, log_out_root=args.out_path)
-        print_rank(imbasefile, check_read_bwd_up_str, log_out_root=args.out_path)
-        print_rank(imbasefile, diff_read_fwd_up_str, log_out_root=args.out_path)
-        print_rank(imbasefile, diff_read_bwd_up_str, log_out_root=args.out_path)
+            print_rank(head_fwd_str, check_read_fwd_low_str, log_out_root=args.out_path)
+            print_rank(head_bwd_str, check_read_bwd_low_str, log_out_root=args.out_path)
+            print_rank(head_fwd_str, diff_read_fwd_low_str, log_out_root=args.out_path)
+            print_rank(head_bwd_str, diff_read_bwd_low_str, log_out_root=args.out_path)
+        print_rank(head_fwd_str, check_read_fwd_up_str, log_out_root=args.out_path)
+        print_rank(head_bwd_str, check_read_bwd_up_str, log_out_root=args.out_path)
+        print_rank(head_fwd_str, diff_read_fwd_up_str, log_out_root=args.out_path)
+        print_rank(head_bwd_str, diff_read_bwd_up_str, log_out_root=args.out_path)
         # print read and upflow flow
         if up:
             print_debug_list(read_flo_fwd[i], debug_read_fwd[i])
@@ -463,6 +468,8 @@ def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, arg
         if len(load_flow_fwds) <= 0:
             load_flow_fwds = [flow_fwd_path.rstrip("/") + ".pth"]
             load_flow_bwds = [flow_bwd_path.rstrip("/") + ".pth"]
+            print_rank(load_flow_fwds[0], video_name)
+            print_rank(load_flow_bwds[0], video_name)
             if is_split_file:
                 fwd_path = load_flow_fwds[0]
                 bwd_path = load_flow_bwds[0]
@@ -473,7 +480,8 @@ def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, arg
                     load_flow_fwds = adjust_dim(flow_fwd, 4)
                 if is_file_bwd:
                     flow_bwd = torch.load(bwd_path, map_location=torch.device('cpu'))
-                    load_flow_bwds = adjust_dim(flow_bwd, 4)
+                    tmp_load_flow_bwds = adjust_dim(flow_bwd, 4)
+                    load_flow_bwds = torch.tensor(tmp_load_flow_bwds.tolist()[::-1])
         print_rank(flow_fwd_path, type(load_flow_fwds), len(load_flow_fwds), video_name)
         print_rank(flow_bwd_path, type(load_flow_bwds), len(load_flow_bwds), video_name)
         # debug output path
