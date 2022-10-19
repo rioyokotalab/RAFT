@@ -579,6 +579,8 @@ def demo(args):
     # output data path
     out_root_fwd = os.path.join(out_root, "forward")
     out_root_bwd = os.path.join(out_root, "backward")
+    os.makedirs(out_root_fwd, exist_ok=True)
+    os.makedirs(out_root_bwd, exist_ok=True)
 
     # check exist dir for input data root
     if not os.path.isdir(args.path):
