@@ -194,7 +194,8 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     save_flows(flow_bwd, fnames_bwd)
     l_e_time = time.perf_counter()
     l_exec_time = l_e_time - l_m_time
-    print_rank(video_name, imbasefiles, "calc optical flow time (s):", l_exec_m_time, log_out_root=args.out_path)
+    prin_str = f"{video_name} {imbasefiles}"
+    print_rank(prin_str, "calc optical flow time (s):", l_exec_m_time, log_out_root=args.out_path)
     print_rank(video_name, "save optical flow time (s):", l_exec_time, log_out_root=args.out_path)
 
 
