@@ -206,17 +206,32 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     load_flow_fwd, load_flow_bwd = [], []
     is_check_load_fwd = load_flow_fwds[0] is not None
     is_check_load_bwd = load_flow_bwds[0] is not None
-    is_check_load_fwd = is_check_load_fwd and os.path.isfile(load_flow_fwds[0])
-    is_check_load_bwd = is_check_load_bwd and os.path.isfile(load_flow_bwds[0])
+    is_tensor_fwd = isinstance(load_flow_fwds[0], torch.Tensor)
+    is_tensor_bwd = isinstance(load_flow_bwds[0], torch.Tensor)
+    is_file_fwd = is_check_load_fwd and not is_tensor_fwd
+    is_file_fwd = is_file_fwd and os.path.isfile(load_flow_fwds[0])
+    is_file_bwd = is_check_load_bwd and not is_tensor_bwd
+    is_file_bwd = is_file_bwd and os.path.isfile(load_flow_bwds[0])
+    is_check_load_fwd = is_file_fwd or is_tensor_fwd
+    is_check_load_bwd = is_file_bwd or is_tensor_bwd
+    flo_fwd_basefiles, flo_bwd_basefiles = [], []
     if is_check_load_fwd:
-        for flo_file in load_flow_fwds:
-            flow = torch.load(flo_file, map_location=torch.device('cpu'))
+        for flo in load_flow_fwds:
+            if is_file_fwd:
+                flow = torch.load(flo, map_location=torch.device('cpu'))
+                flo_fwd_basefiles.append(os.path.basename(flo))
+            elif is_tensor_fwd:
+                flow = flo.clone()
             load_flow_fwd.append(flow.cuda())
         if len(load_flow_fwd) <= 1 and load_flow_fwd[0].ndim > 3:
             load_flow_fwd = load_flow_fwd[0]
     if is_check_load_bwd:
-        for flo_file in load_flow_bwds:
-            flow = torch.load(flo_file, map_location=torch.device('cpu'))
+        for flo in load_flow_bwds:
+            if is_file_bwd:
+                flow = torch.load(flo, map_location=torch.device('cpu'))
+                flo_bwd_basefiles.append(os.path.basename(flo))
+            elif is_tensor_bwd:
+                flow = flo.clone()
             load_flow_bwd.append(flow.cuda())
         if len(load_flow_bwd) <= 1 and load_flow_bwd[0].ndim > 3:
             load_flow_bwd = load_flow_bwd[0]
@@ -280,7 +295,8 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     read_flo_bwd, _ = save_flows(flow_bwd, fnames_bwd)
     l_e_time = time.perf_counter()
     l_exec_time = l_e_time - l_m_time
-    print_rank(video_name, imbasefiles, "calc optical flow time (s):", l_exec_m_time, log_out_root=args.out_path)
+    prin_str = f"{video_name} {flo_fwd_basefiles} {flo_bwd_basefiles} {imbasefiles}"
+    print_rank(prin_str, "calc optical flow time (s):", l_exec_m_time, log_out_root=args.out_path)
     print_rank(video_name, "save optical flow time (s):", l_exec_time, log_out_root=args.out_path)
     # print_rank(imbasefiles, flow_fwd_up.shape, flow_fwd_up, flow_bwd_up, log_out_root=args.out_path)
     # print_rank(imbasefiles, flow_fwd_low.shape, flow_fwd_low, flow_bwd_low, log_out_root=args.out_path)
@@ -315,56 +331,63 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
     read_flo_fwd = adjust_dim(read_flo_fwd, 4)
     read_flo_bwd = adjust_dim(read_flo_bwd, 4)
     for i in range(num):
+        imbasefile = imbasefiles[i:i+2]
+        if is_check_load_fwd:
+            fwd_basefile = flo_fwd_basefiles[i]
+            head_fwd_str = f"{i} {imbasefile} {fwd_basefile}"
+        if is_check_load_bwd:
+            bwd_basefile = flo_bwd_basefiles[i]
+            head_bwd_str = f"{i} {imbasefile} {bwd_basefile}"
         # check upflow func
-        print_rank("check upflow func", log_out_root=args.out_path)
+        print_rank(imbasefile, "check upflow func", log_out_root=args.out_path)
         flow_fwd_low_up = upflow8(flow_fwd_low[i])
         flow_bwd_low_up = upflow8(flow_bwd_low[i])
         check_flow_fwd_str = get_str_e(flow_fwd_low_up[0], flow_fwd_up[i][0])
         check_flow_bwd_str = get_str_e(flow_bwd_low_up[0], flow_bwd_up[i][0])
         diff_flow_fwd_str = get_str_d(flow_fwd_low_up[0], flow_fwd_up[i][0])
         diff_flow_bwd_str = get_str_d(flow_bwd_low_up[0], flow_bwd_up[i][0])
-        print_rank(check_flow_fwd_str, log_out_root=args.out_path)
-        print_rank(check_flow_bwd_str, log_out_root=args.out_path)
-        print_rank(diff_flow_fwd_str, log_out_root=args.out_path)
-        print_rank(diff_flow_bwd_str, log_out_root=args.out_path)
+        print_rank(imbasefile, check_flow_fwd_str, log_out_root=args.out_path)
+        print_rank(imbasefile, check_flow_bwd_str, log_out_root=args.out_path)
+        print_rank(imbasefile, diff_flow_fwd_str, log_out_root=args.out_path)
+        print_rank(imbasefile, diff_flow_bwd_str, log_out_root=args.out_path)
         # print original flow up
         print_debug_list(flow_fwd_up[i][0], debug_orig_fwd[i])
         print_debug_list(flow_bwd_up[i][0], debug_orig_bwd[i])
         # check load flow
         if is_check_load_fwd or is_check_load_fwd:
-            print_rank("check load flow", log_out_root=args.out_path)
+            print_rank(imbasefile, "check load flow", log_out_root=args.out_path)
         if is_check_load_fwd:
-            print_rank(i, imbasefiles[i], load_flow_fwd[i].shape, log_out_root=args.out_path)
+            print_rank(head_fwd_str, load_flow_fwd[i].shape, log_out_root=args.out_path)
         elif is_check_load_bwd:
-            print_rank(i, imbasefiles[i], load_flow_bwd[i].shape, log_out_root=args.out_path)
+            print_rank(head_bwd_str, load_flow_bwd[i].shape, log_out_root=args.out_path)
         if is_check_load_fwd:
             load_flow_fwd_low_up = upflow8(load_flow_fwd[i].unsqueeze(0))
             check_load_fwd_low_str = get_str_e(load_flow_fwd[i], flow_fwd_low[i][0])
             check_load_fwd_up_str = get_str_e(load_flow_fwd_low_up[0], flow_fwd_up[i][0])
             diff_load_fwd_low_str = get_str_d(load_flow_fwd[i], flow_fwd_low[i][0])
             diff_load_fwd_up_str = get_str_d(load_flow_fwd_low_up[0], flow_fwd_up[i][0])
-            print_rank(check_load_fwd_low_str, log_out_root=args.out_path)
-            print_rank(diff_load_fwd_low_str, log_out_root=args.out_path)
-            print_rank(check_load_fwd_up_str, log_out_root=args.out_path)
-            print_rank(diff_load_fwd_up_str, log_out_root=args.out_path)
+            print_rank(head_fwd_str, check_load_fwd_low_str, log_out_root=args.out_path)
+            print_rank(head_fwd_str, diff_load_fwd_low_str, log_out_root=args.out_path)
+            print_rank(head_fwd_str, check_load_fwd_up_str, log_out_root=args.out_path)
+            print_rank(head_fwd_str, diff_load_fwd_up_str, log_out_root=args.out_path)
         if is_check_load_bwd:
             load_flow_bwd_low_up = upflow8(load_flow_bwd[i].unsqueeze(0))
             check_load_bwd_low_str = get_str_e(load_flow_bwd[i], flow_bwd_low[i][0])
             check_load_bwd_up_str = get_str_e(load_flow_bwd_low_up[0], flow_bwd_up[i][0])
             diff_load_bwd_low_str = get_str_d(load_flow_bwd[i], flow_bwd_low[i][0])
             diff_load_bwd_up_str = get_str_d(load_flow_bwd_low_up[0], flow_bwd_up[i][0])
-            print_rank(check_load_bwd_low_str, log_out_root=args.out_path)
-            print_rank(diff_load_bwd_low_str, log_out_root=args.out_path)
-            print_rank(check_load_bwd_up_str, log_out_root=args.out_path)
-            print_rank(diff_load_bwd_up_str, log_out_root=args.out_path)
+            print_rank(head_bwd_str, check_load_bwd_low_str, log_out_root=args.out_path)
+            print_rank(head_bwd_str, diff_load_bwd_low_str, log_out_root=args.out_path)
+            print_rank(head_bwd_str, check_load_bwd_up_str, log_out_root=args.out_path)
+            print_rank(head_bwd_str, diff_load_bwd_up_str, log_out_root=args.out_path)
         # print load and up flow
         if is_check_load_fwd:
             print_debug_list(load_flow_fwd_low_up[0], debug_load_fwd[i])
         if is_check_load_bwd:
             print_debug_list(load_flow_bwd_low_up[0], debug_load_bwd[i])
         # read save flow check
-        print_rank("check save flow", log_out_root=args.out_path)
-        print_rank(read_flo_fwd[i].shape, flow_fwd_up[i][0].shape, log_out_root=args.out_path)
+        print_rank(imbasefile, "check save flow", log_out_root=args.out_path)
+        print_rank(imbasefile, read_flo_fwd[i].shape, flow_fwd_up[i][0].shape, log_out_root=args.out_path)
         if up:
             check_read_fwd_up_str = get_str_e(read_flo_fwd[i], flow_fwd_up[i][0])
             check_read_bwd_up_str = get_str_e(read_flo_bwd[i], flow_bwd_up[i][0])
@@ -381,21 +404,21 @@ def save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_
             diff_read_bwd_low_str = get_str_d(read_flo_bwd[i], flow_bwd_low[i][0])
             diff_read_fwd_up_str = get_str_d(read_flo_fwd_low_up[0], flow_fwd_up[i][0])
             diff_read_bwd_up_str = get_str_d(read_flo_bwd_low_up[0], flow_bwd_up[i][0])
-            print_rank(check_read_fwd_low_str, log_out_root=args.out_path)
-            print_rank(check_read_bwd_low_str, log_out_root=args.out_path)
-            print_rank(diff_read_fwd_low_str, log_out_root=args.out_path)
-            print_rank(diff_read_bwd_low_str, log_out_root=args.out_path)
-        print_rank(check_read_fwd_up_str, log_out_root=args.out_path)
-        print_rank(check_read_bwd_up_str, log_out_root=args.out_path)
-        print_rank(diff_read_fwd_up_str, log_out_root=args.out_path)
-        print_rank(diff_read_bwd_up_str, log_out_root=args.out_path)
+            print_rank(imbasefile, check_read_fwd_low_str, log_out_root=args.out_path)
+            print_rank(imbasefile, check_read_bwd_low_str, log_out_root=args.out_path)
+            print_rank(imbasefile, diff_read_fwd_low_str, log_out_root=args.out_path)
+            print_rank(imbasefile, diff_read_bwd_low_str, log_out_root=args.out_path)
+        print_rank(imbasefile, check_read_fwd_up_str, log_out_root=args.out_path)
+        print_rank(imbasefile, check_read_bwd_up_str, log_out_root=args.out_path)
+        print_rank(imbasefile, diff_read_fwd_up_str, log_out_root=args.out_path)
+        print_rank(imbasefile, diff_read_bwd_up_str, log_out_root=args.out_path)
         # print read and upflow flow
         if up:
             print_debug_list(read_flo_fwd[i], debug_read_fwd[i])
             print_debug_list(read_flo_bwd[i], debug_read_bwd[i])
         else:
-            print_debug_list(read_flo_fwd_low_up[i], debug_read_fwd[i])
-            print_debug_list(read_flo_bwd_low_up[i], debug_read_bwd[i])
+            print_debug_list(read_flo_fwd_low_up[0], debug_read_fwd[i])
+            print_debug_list(read_flo_bwd_low_up[0], debug_read_bwd[i])
 
 
 @torch.no_grad()
@@ -435,12 +458,24 @@ def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, arg
         flow_bwd_path = os.path.join(load_flow_bwd_root, video_name)
         load_flow_fwds = glob.glob(os.path.join(flow_fwd_path, '*.pth'))
         load_flow_bwds = glob.glob(os.path.join(flow_bwd_path, '*.pth'))
+        load_flow_fwds = sorted(load_flow_fwds)
+        load_flow_bwds = sorted(load_flow_bwds)
         if len(load_flow_fwds) <= 0:
             load_flow_fwds = [flow_fwd_path.rstrip("/") + ".pth"]
             load_flow_bwds = [flow_bwd_path.rstrip("/") + ".pth"]
-        load_flow_fwds = sorted(load_flow_fwds)
-        load_flow_bwds = sorted(load_flow_bwds)
-        print_rank(flow_fwd_path, len(load_flow_fwds), video_name)
+            if is_split_file:
+                fwd_path = load_flow_fwds[0]
+                bwd_path = load_flow_bwds[0]
+                is_file_fwd = os.path.isfile(fwd_path)
+                is_file_bwd = os.path.isfile(bwd_path)
+                if is_file_fwd:
+                    flow_fwd = torch.load(fwd_path, map_location=torch.device('cpu'))
+                    load_flow_fwds = adjust_dim(flow_fwd, 4)
+                if is_file_bwd:
+                    flow_bwd = torch.load(bwd_path, map_location=torch.device('cpu'))
+                    load_flow_bwds = adjust_dim(flow_bwd, 4)
+        print_rank(flow_fwd_path, type(load_flow_fwds), len(load_flow_fwds), video_name)
+        print_rank(flow_bwd_path, type(load_flow_bwds), len(load_flow_bwds), video_name)
         # debug output path
         if os.path.isdir(load_flow_fwd_root):
             debug_out_root_load_fwd = make_dir(out_root_fwd, "load")
@@ -470,7 +505,10 @@ def demo_one_video(model, data_root, video_name, out_root_fwd, out_root_bwd, arg
                 imfiles = [[imfile1, imfile2], [[None], [None]]]
             save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_path, args)
     else:
-        imfiles = [images[:], [load_flow_fwds[:], load_flow_bwds[:]]]
+        if is_check_load_flow:
+            imfiles = [images[:], [load_flow_fwds[:], load_flow_bwds[:]]]
+        else:
+            imfiles = [images[:], [[None], [None]]]
         save_imfiles_optical_flow(model, video_name, imfiles, out_fwd_path, out_bwd_path, args)
     e_time = time.perf_counter()
     exec_time = e_time - s_time
